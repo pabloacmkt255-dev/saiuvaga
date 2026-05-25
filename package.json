@@ -1,21 +1,17 @@
 {
   "name": "saiuvaga",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "main": "scraper.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node scraper.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "axios": "^1.16.1",
-    "cheerio": "^1.2.0",
-    "dotenv": "^17.4.2",
-    "node-cron": "^4.2.1",
-    "puppeteer": "^25.0.4"
+    "@supabase/supabase-js": "^2.0.0",
+    "axios": "^1.0.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.0.0",
+    "node-cron": "^3.0.0",
+    "puppeteer": "^21.0.0"
   }
+}
 }
