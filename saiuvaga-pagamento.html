@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Assinar</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://sdk.mercadopago.com/js/v2"></script>
+<style>
+:root{--g:#1D9E75;--gdk:#0B6B4E;--glt:#E0F5EE;--ink:#0D110F;--ink3:#6B7570;--bg:#F4F6F4;--wh:#fff;--ln:#DDE4DE;--r:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink);-webkit-font-smoothing:antialiased;display:flex;align-items:center;justify-content:center;padding:24px}
+.wrap{width:100%;max-width:520px}
+.logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;margin-bottom:32px;justify-content:center}
+.logo-mark{width:34px;height:34px;background:var(--g);border-radius:9px;display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:16px;height:16px}
+.card{background:var(--wh);border:1px solid var(--ln);border-radius:16px;padding:32px}
+.card-title{font-size:22px;font-weight:700;margin-bottom:6px}
+.card-sub{font-size:14px;color:var(--ink3);margin-bottom:28px}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px}
+.plan{border:1.5px solid var(--ln);border-radius:var(--r);padding:16px;cursor:pointer;transition:all .2s;position:relative}
+.plan:hover,.plan.on{border-color:var(--g);background:var(--glt)}
+.plan-name{font-size:13px;font-weight:600;margin-bottom:4px}
+.plan-price{font-size:26px;font-weight:700;color:var(--g);line-height:1}
+.plan-price sub{font-size:12px;font-weight:400;color:var(--ink3)}
+.plan-desc{font-size:11px;color:var(--ink3);margin-top:6px;line-height:1.4}
+.plan-badge{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--g);color:#fff;font-size:9px;font-weight:700;border-radius:99px;padding:2px 10px;white-space:nowrap}
+.divider{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink3);margin:20px 0}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--ln)}
+/* Mercado Pago Brick container */
+#cardPaymentBrick_container{min-height:300px}
+.pix-btn{width:100%;height:50px;background:#00b4d8;color:#fff;border:none;border-radius:var(--r);font-size:15px;font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s;margin-bottom:10px}
+.pix-btn:hover{background:#0096b7}
+.boleto-btn{width:100%;height:50px;background:var(--bg);border:1.5px solid var(--ln);color:var(--ink);border-radius:var(--r);font-size:15px;font-weight:500;font-family:'Outfit',sans-serif;cursor:pointer;transition:all .2s;margin-bottom:20px}
+.boleto-btn:hover{border-color:var(--g);color:var(--g)}
+.security-row{display:flex;align-items:center;justify-content:center;gap:16px;font-size:12px;color:var(--ink3)}
+.security-item{display:flex;align-items:center;gap:5px}
+.success-view{display:none;text-align:center;padding:20px 0}
+.success-ico{width:64px;height:64px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;color:var(--gdk)}
+.loading{display:none;text-align:center;padding:40px}
+.spinner{width:32px;height:32px;border:3px solid var(--ln);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 18 18" fill="none">
+        <circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/>
+        <line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    SaiuVaga
+  </div>
+
+  <div class="card" id="main-card">
+    <div class="card-title">Escolha seu plano</div>
+    <div class="card-sub">Cancele quando quiser. Sem taxa de cancelamento.</div>
+
+    <div class="plans">
+      <div class="plan on" id="plan-morador" onclick="selectPlan('morador',19)">
+        <div class="plan-badge">Popular</div>
+        <div class="plan-name">Morador</div>
+        <div class="plan-price">R$19<sub>/mês</sub></div>
+        <div class="plan-desc">Alertas ilimitados · Tempo real · 5 filtros</div>
+      </div>
+      <div class="plan" id="plan-b2b" onclick="selectPlan('b2b',99)">
+        <div class="plan-name">Corretor B2B</div>
+        <div class="plan-price">R$99<sub>/mês</sub></div>
+        <div class="plan-desc">API + filtros ilimitados · Painel de leads</div>
+      </div>
+    </div>
+
+    <!-- Pix -->
+    <button class="pix-btn" onclick="pagarPix()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Pagar com Pix — R$<span id="pix-price">19</span>/mês
+    </button>
+
+    <button class="boleto-btn" onclick="pagarBoleto()">Pagar com Boleto Bancário</button>
+
+    <div class="divider">ou pague com cartão</div>
+
+    <!-- MP Brick -->
+    <div id="cardPaymentBrick_container"></div>
+
+    <div class="security-row" style="margin-top:16px">
+      <div class="security-item">🔒 Pagamento seguro</div>
+      <div class="security-item">✓ SSL 256-bit</div>
+      <div class="security-item">🏦 Mercado Pago</div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="card loading" id="loading-card">
+    <div class="spinner"></div>
+    <p style="color:var(--ink3);font-size:14px" id="loading-msg">Processando pagamento...</p>
+  </div>
+
+  <!-- Success -->
+  <div class="card success-view" id="success-card">
+    <div class="success-ico">✓</div>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:8px">Pagamento confirmado!</h2>
+    <p style="font-size:14px;color:var(--ink3);margin-bottom:24px;line-height:1.6" id="success-msg">
+      Sua assinatura está ativa. Você já pode receber alertas no WhatsApp.
+    </p>
+    <a href="saiuvaga-cadastro.html" style="display:inline-block;background:var(--g);color:#fff;padding:12px 28px;border-radius:var(--r);text-decoration:none;font-weight:600;font-size:14px">
+      Acessar meu painel →
+    </a>
+  </div>
+</div>
+
+<script>
+// ── Configuração ────────────────────────────────────────────
+// SUBSTITUA pela sua Public Key do Mercado Pago
+// Encontre em: mercadopago.com.br/developers/panel → Credenciais
+const MP_PUBLIC_KEY = 'APP_USR-7064058106447859-091416-9aee0952db68aabc07bc851e04acbd5d-762459442';
+
+let planoAtual = 'morador';
+let precoAtual = 19;
+
+// Inicializa Mercado Pago
+const mp = new MercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
+
+// Cria o brick de cartão
+const bricksBuilder = mp.bricks();
+
+async function renderCardBrick() {
+  await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', {
+    initialization: {
+      amount: precoAtual,
+      payer: { email: '' },
+    },
+    customization: {
+      paymentMethods: { creditCard: 'all', debitCard: 'all' },
+      visual: {
+        style: {
+          theme: 'default',
+          customVariables: {
+            baseColor: '#1D9E75',
+            borderRadiusFull: '12px',
+          }
+        }
+      }
+    },
+    callbacks: {
+      onReady: () => console.log('Brick pronto'),
+      onSubmit: async (cardFormData) => {
+        showLoading('Processando cartão...');
+        try {
+          // Envia para o backend
+          const res = await fetch('/api/pagamento/cartao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...cardFormData,
+              plano: planoAtual,
+              valor: precoAtual,
+            }),
+          });
+          const data = await res.json();
+          if (data.status === 'approved') {
+            showSuccess('Cartão aprovado! Sua assinatura está ativa.');
+          } else {
+            showLoading(false);
+            alert('Pagamento não aprovado. Tente outro cartão.');
+          }
+        } catch (err) {
+          showLoading(false);
+          alert('Erro ao processar. Tente novamente.');
+        }
+      },
+      onError: (err) => console.error('Brick error:', err),
+    },
+  });
+}
+
+function selectPlan(plano, preco) {
+  planoAtual = plano;
+  precoAtual = preco;
+  document.querySelectorAll('.plan').forEach(p => p.classList.remove('on'));
+  document.getElementById('plan-' + plano).classList.add('on');
+  document.getElementById('pix-price').textContent = preco;
+}
+
+async function pagarPix() {
+  showLoading('Gerando QR Code Pix...');
+  try {
+    const res = await fetch('/api/pagamento/pix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plano: planoAtual, valor: precoAtual }),
+    });
+    const data = await res.json();
+    showLoading(false);
+    // Mostra o QR code do Pix
+    alert('Pix gerado! Copie o código: ' + (data.qr_code || 'Acesse o painel para ver o QR Code'));
+  } catch (err) {
+    showLoading(false);
+    alert('Erro ao gerar Pix. Tente novamente.');
+  }
+}
+
+async function pagarBoleto() {
+  showLoading('Gerando boleto...');
+  try {
+    const res = await fetch('/api/pagamento/boleto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plano: planoAtual, valor: precoAtual }),
+    });
+    const data = await res.json();
+    showLoading(false);
+    if (data.boleto_url) window.open(data.boleto_url, '_blank');
+  } catch (err) {
+    showLoading(false);
+    alert('Erro ao gerar boleto. Tente novamente.');
+  }
+}
+
+function showLoading(msg) {
+  if (!msg) {
+    document.getElementById('loading-card').style.display = 'none';
+    document.getElementById('main-card').style.display = 'block';
+    return;
+  }
+  document.getElementById('main-card').style.display = 'none';
+  document.getElementById('loading-card').style.display = 'block';
+  document.getElementById('loading-msg').textContent = msg;
+}
+
+function showSuccess(msg) {
+  document.getElementById('loading-card').style.display = 'none';
+  document.getElementById('main-card').style.display = 'none';
+  document.getElementById('success-card').style.display = 'block';
+  document.getElementById('success-msg').textContent = msg;
+}
+
+// Inicializa
+renderCardBrick();
+</script>
+</body>
+</html>
