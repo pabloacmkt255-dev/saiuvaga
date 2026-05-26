@@ -35,6 +35,86 @@ app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 // ── Rota de saúde ───────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅' }));
 
+// ── Ativar trial de 7 dias ──────────────────────────────────
+app.post('/api/trial/ativar', async (req, res) => {
+  try {
+    const { user_id, email } = req.body;
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+
+    // Verifica se já usou trial
+    const query = user_id
+      ? supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('id', user_id).maybeSingle()
+      : supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('email', email).maybeSingle();
+
+    const { data: user } = await query;
+
+    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
+    if (user.trial_usado) return res.status(400).json({ erro: 'Trial já utilizado', ja_usou: true });
+    if (user.ativo) return res.status(400).json({ erro: 'Usuário já possui plano ativo' });
+
+    const validade = new Date();
+    validade.setDate(validade.getDate() + 7);
+
+    await supabase.from('users').update({
+      ativo: true,
+      trial_usado: true,
+      plano_validade: validade.toISOString(),
+      plano: 'trial',
+    }).eq('id', user.id);
+
+    console.log(`   🎁 Trial ativado para ${email || user_id} até ${validade.toLocaleDateString('pt-BR')}`);
+
+    res.json({
+      ok: true,
+      mensagem: 'Trial de 7 dias ativado!',
+      validade: validade.toISOString(),
+      dias: 7,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro trial:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Verificar status do usuário ─────────────────────────────
+app.get('/api/usuario/status', async (req, res) => {
+  try {
+    const { user_id, email } = req.query;
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+
+    const query = user_id
+      ? supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('id', user_id).maybeSingle()
+      : supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('email', email).maybeSingle();
+
+    const { data: user } = await query;
+    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
+
+    const agora = new Date();
+    const validade = user.plano_validade ? new Date(user.plano_validade) : null;
+    const ativo = user.ativo && validade && validade > agora;
+
+    // Se expirou, desativa automaticamente
+    if (user.ativo && validade && validade <= agora) {
+      await supabase.from('users').update({ ativo: false }).eq('id', user.id);
+    }
+
+    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
+
+    res.json({
+      ativo,
+      plano: user.plano,
+      trial_usado: user.trial_usado,
+      validade: user.plano_validade,
+      dias_restantes: diasRestantes,
+      em_trial: user.plano === 'trial' && ativo,
+    });
+
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 // ── Gerar Pix ───────────────────────────────────────────────
 app.post('/api/pagamento/pix', async (req, res) => {
   try {
@@ -44,7 +124,7 @@ app.post('/api/pagamento/pix', async (req, res) => {
       return res.status(400).json({ erro: 'email, nome e cpf são obrigatórios' });
     }
 
-    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
 
     const payment = new Payment(mp);
@@ -90,7 +170,7 @@ app.post('/api/pagamento/boleto', async (req, res) => {
       return res.status(400).json({ erro: 'email, nome, cpf e cep são obrigatórios' });
     }
 
-    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
 
     const payment = new Payment(mp);
@@ -134,7 +214,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
       return res.status(400).json({ erro: 'email é obrigatório' });
     }
 
-    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
 
     const preference = new Preference(mp);
@@ -206,8 +286,7 @@ app.post('/api/webhook/mp', async (req, res) => {
     }
 
     // Calcula validade conforme valor pago
-    const diasPlano = pag.transaction_amount >= 140 ? 365
-      : pag.transaction_amount >= 45 ? 90 : 30;
+    const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
 
     const validade = new Date();
     validade.setDate(validade.getDate() + diasPlano);
