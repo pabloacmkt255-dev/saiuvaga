@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SaiuVaga — Cadastro</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --g: #1D9E75;
@@ -21,11 +22,9 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 html { scroll-behavior: smooth; }
-
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   background: var(--bg);
   min-height: 100vh;
   color: var(--ink);
@@ -33,7 +32,6 @@ body {
   overflow-x: hidden;
 }
 
-/* ── BACKGROUND ── */
 .bg-pattern {
   position: fixed;
   inset: 0;
@@ -44,7 +42,6 @@ body {
   z-index: 0;
 }
 
-/* ── LAYOUT ── */
 .container {
   position: relative;
   z-index: 1;
@@ -53,7 +50,7 @@ body {
   grid-template-columns: 1fr 480px;
 }
 
-/* ── LEFT PANEL ── */
+/* LEFT */
 .left {
   padding: 48px 56px;
   display: flex;
@@ -65,7 +62,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
   font-weight: 800;
   color: var(--ink);
@@ -119,8 +116,7 @@ body {
 }
 
 .pulse {
-  width: 7px;
-  height: 7px;
+  width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--g);
   animation: pulse 1.5s infinite;
@@ -132,7 +128,7 @@ body {
 }
 
 .hero-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: clamp(32px, 4vw, 52px);
   font-weight: 800;
   line-height: 1.1;
@@ -141,10 +137,7 @@ body {
   letter-spacing: -.02em;
 }
 
-.hero-title em {
-  font-style: normal;
-  color: var(--g);
-}
+.hero-title em { font-style: normal; color: var(--g); }
 
 .hero-sub {
   font-size: 17px;
@@ -162,13 +155,10 @@ body {
   margin-bottom: 48px;
 }
 
-.proof-item {
-  display: flex;
-  flex-direction: column;
-}
+.proof-item { display: flex; flex-direction: column; }
 
 .proof-num {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 28px;
   font-weight: 800;
   color: var(--ink);
@@ -176,25 +166,10 @@ body {
 }
 
 .proof-num span { color: var(--g); }
+.proof-label { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+.proof-div { width: 1px; height: 36px; background: var(--ln); }
 
-.proof-label {
-  font-size: 12px;
-  color: var(--ink3);
-  margin-top: 2px;
-}
-
-.proof-div {
-  width: 1px;
-  height: 36px;
-  background: var(--ln);
-}
-
-.testimonials {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 460px;
-}
+.testimonials { display: flex; flex-direction: column; gap: 12px; max-width: 460px; }
 
 .testi {
   background: var(--wh);
@@ -212,13 +187,10 @@ body {
 .testi:nth-child(1) { animation-delay: .1s; }
 .testi:nth-child(2) { animation-delay: .25s; }
 
-@keyframes fadeUp {
-  to { opacity: 1; transform: translateY(0); }
-}
+@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
 .testi-av {
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   border-radius: 8px;
   flex-shrink: 0;
   display: flex;
@@ -230,28 +202,11 @@ body {
 }
 
 .testi-body { flex: 1; }
+.testi-text { font-size: 13px; color: var(--ink2); line-height: 1.55; margin-bottom: 4px; }
+.testi-name { font-size: 11px; color: var(--ink3); font-weight: 500; }
+.testi-time { font-size: 11px; color: var(--g); font-weight: 600; white-space: nowrap; }
 
-.testi-text {
-  font-size: 13px;
-  color: var(--ink2);
-  line-height: 1.55;
-  margin-bottom: 4px;
-}
-
-.testi-name {
-  font-size: 11px;
-  color: var(--ink3);
-  font-weight: 500;
-}
-
-.testi-time {
-  font-size: 11px;
-  color: var(--g);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* ── RIGHT PANEL ── */
+/* RIGHT */
 .right {
   background: var(--wh);
   border-left: 1px solid var(--ln);
@@ -262,24 +217,18 @@ body {
   min-height: 100vh;
 }
 
-.form-head {
-  margin-bottom: 32px;
-}
+.form-head { margin-bottom: 32px; }
 
 .form-title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 24px;
   font-weight: 800;
   color: var(--ink);
   margin-bottom: 6px;
 }
 
-.form-sub {
-  font-size: 14px;
-  color: var(--ink3);
-}
+.form-sub { font-size: 14px; color: var(--ink3); }
 
-/* Tabs */
 .tabs {
   display: flex;
   background: var(--bg);
@@ -298,7 +247,7 @@ body {
   cursor: pointer;
   color: var(--ink3);
   transition: all .2s;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .tab.on {
@@ -307,7 +256,6 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,.08);
 }
 
-/* Google button */
 .google-btn {
   width: 100%;
   height: 50px;
@@ -320,19 +268,15 @@ body {
   background: var(--wh);
   font-size: 14px;
   font-weight: 500;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   color: var(--ink);
   cursor: pointer;
   transition: all .2s;
   margin-bottom: 20px;
 }
 
-.google-btn:hover {
-  border-color: var(--g);
-  background: var(--glt);
-}
+.google-btn:hover { border-color: var(--g); background: var(--glt); }
 
-/* Divider */
 .divider {
   display: flex;
   align-items: center;
@@ -342,14 +286,8 @@ body {
   color: var(--ink3);
 }
 
-.divider::before, .divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--ln);
-}
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--ln); }
 
-/* Fields */
 .field { margin-bottom: 14px; }
 
 .field label {
@@ -369,7 +307,7 @@ body {
   border-radius: var(--r);
   padding: 0 14px;
   font-size: 14px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   background: var(--bg);
   color: var(--ink);
   outline: none;
@@ -383,9 +321,6 @@ body {
   box-shadow: 0 0 0 3px rgba(29,158,117,.1);
 }
 
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-/* Plan cards */
 .plan-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -403,44 +338,22 @@ body {
 }
 
 .plan-card:hover { border-color: var(--g); }
-
-.plan-card.on {
-  border-color: var(--g);
-  background: var(--glt);
-}
-
-.plan-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  margin-bottom: 2px;
-}
+.plan-card.on { border-color: var(--g); background: var(--glt); }
+.plan-card-name { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
 
 .plan-card-price {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 20px;
   font-weight: 800;
   color: var(--g);
 }
 
-.plan-card-price sub {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--ink3);
-  font-family: 'DM Sans', sans-serif;
-}
-
-.plan-card-desc {
-  font-size: 11px;
-  color: var(--ink3);
-  margin-top: 4px;
-  line-height: 1.4;
-}
+.plan-card-price sub { font-size: 11px; font-weight: 400; color: var(--ink3); font-family: 'Inter', sans-serif; }
+.plan-card-desc { font-size: 11px; color: var(--ink3); margin-top: 4px; line-height: 1.4; }
 
 .plan-badge {
   position: absolute;
-  top: -8px;
-  right: 10px;
+  top: -8px; right: 10px;
   background: var(--g);
   color: #fff;
   font-size: 9px;
@@ -450,7 +363,6 @@ body {
   letter-spacing: .3px;
 }
 
-/* Submit */
 .submit-btn {
   width: 100%;
   height: 50px;
@@ -460,7 +372,7 @@ body {
   border-radius: var(--r);
   font-size: 15px;
   font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
   transition: all .2s;
   display: flex;
@@ -477,31 +389,15 @@ body {
 }
 
 .submit-btn:active { transform: translateY(0); }
+.submit-btn:disabled { opacity: .7; cursor: not-allowed; transform: none; }
 
-.hint {
-  font-size: 12px;
-  color: var(--ink3);
-  text-align: center;
-  margin-top: 14px;
-}
+.hint { font-size: 12px; color: var(--ink3); text-align: center; margin-top: 14px; }
+.hint a { color: var(--g); text-decoration: none; font-weight: 500; cursor: pointer; }
 
-.hint a {
-  color: var(--g);
-  text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-/* Success */
-.success-view {
-  display: none;
-  text-align: center;
-  padding: 20px 0;
-}
+.success-view { display: none; text-align: center; padding: 20px 0; }
 
 .success-ico {
-  width: 64px;
-  height: 64px;
+  width: 64px; height: 64px;
   border-radius: 50%;
   background: var(--glt);
   display: flex;
@@ -512,24 +408,10 @@ body {
   animation: popIn .4s cubic-bezier(.34,1.56,.64,1);
 }
 
-@keyframes popIn {
-  from { transform: scale(0); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
+@keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-.success-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 22px;
-  font-weight: 800;
-  margin-bottom: 8px;
-}
-
-.success-sub {
-  font-size: 14px;
-  color: var(--ink3);
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
+.success-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+.success-sub { font-size: 14px; color: var(--ink3); line-height: 1.6; margin-bottom: 24px; }
 
 .wapp-preview {
   background: #ECE5DD;
@@ -547,21 +429,10 @@ body {
   gap: 8px;
 }
 
-.wapp-av {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #128C7E;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
+.wapp-av { width: 28px; height: 28px; border-radius: 50%; background: #128C7E; display: flex; align-items: center; justify-content: center; font-size: 12px; }
 .wapp-info { flex: 1; }
 .wapp-name { font-size: 12px; font-weight: 600; color: #fff; }
 .wapp-status { font-size: 10px; color: rgba(255,255,255,.6); }
-
 .wapp-body { padding: 12px 10px; }
 
 .bubble {
@@ -574,14 +445,8 @@ body {
   max-width: 90%;
 }
 
-.bubble-time {
-  font-size: 9px;
-  color: #999;
-  text-align: right;
-  margin-top: 3px;
-}
+.bubble-time { font-size: 9px; color: #999; text-align: right; margin-top: 3px; }
 
-/* Error */
 .error-msg {
   display: none;
   font-size: 13px;
@@ -592,10 +457,13 @@ body {
   margin-bottom: 14px;
 }
 
-/* Loading */
+.error-msg.success-msg {
+  color: #0F6E56;
+  background: #E1F5EE;
+}
+
 .spinner {
-  width: 18px;
-  height: 18px;
+  width: 18px; height: 18px;
   border: 2px solid rgba(255,255,255,.3);
   border-top-color: #fff;
   border-radius: 50%;
@@ -605,20 +473,11 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Mobile */
 @media (max-width: 768px) {
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
   .right { border-left: none; padding: 32px 24px; min-height: 100vh; }
-  .mobile-logo {
-    display: flex !important;
-    align-items: center;
-    gap: 8px;
-    font-family: 'Syne', sans-serif;
-    font-size: 18px;
-    font-weight: 800;
-    margin-bottom: 28px;
-  }
+  .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 28px; }
 }
 
 .mobile-logo { display: none; }
@@ -631,7 +490,7 @@ body {
 
   <!-- LEFT -->
   <div class="left">
-    <a href="#" class="logo" onclick="return false">
+    <a href="index.html" class="logo">
       <div class="logo-mark">
         <svg viewBox="0 0 18 18" fill="none">
           <circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/>
@@ -698,7 +557,6 @@ body {
   <!-- RIGHT -->
   <div class="right">
 
-    <!-- Mobile logo -->
     <div class="mobile-logo">
       <div class="logo-mark" style="width:32px;height:32px;border-radius:8px">
         <svg viewBox="0 0 18 18" fill="none" style="width:14px;height:14px">
@@ -709,7 +567,6 @@ body {
       SaiuVaga
     </div>
 
-    <!-- Main form -->
     <div id="main-form">
       <div class="form-head">
         <div class="form-title" id="form-title">Criar sua conta</div>
@@ -723,7 +580,6 @@ body {
 
       <div class="error-msg" id="error-msg"></div>
 
-      <!-- Google -->
       <button class="google-btn" onclick="loginGoogle()">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -739,7 +595,7 @@ body {
       <!-- Cadastro -->
       <div id="view-cadastrar">
         <div class="field">
-          <label>Nome</label>
+          <label>Nome completo</label>
           <input type="text" id="reg-nome" placeholder="Seu nome completo">
         </div>
         <div class="field">
@@ -748,7 +604,7 @@ body {
         </div>
         <div class="field">
           <label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label>
-          <input type="tel" id="reg-wpp" placeholder="11 99999-0000">
+          <input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)">
         </div>
         <div class="field">
           <label>Senha</label>
@@ -756,20 +612,21 @@ body {
         </div>
 
         <div class="plan-cards">
-          <div class="plan-card on" onclick="selectPlan(this,'morador')">
+          <div class="plan-card on" onclick="selectPlan(this,'mensal')">
             <div class="plan-badge">Popular</div>
-            <div class="plan-card-name">Morador</div>
+            <div class="plan-card-name">Mensal</div>
             <div class="plan-card-price">R$19<sub>/mês</sub></div>
             <div class="plan-card-desc">Alertas ilimitados em tempo real</div>
           </div>
-          <div class="plan-card" onclick="selectPlan(this,'b2b')">
-            <div class="plan-card-name">Corretor B2B</div>
-            <div class="plan-card-price">R$99<sub>/mês</sub></div>
-            <div class="plan-card-desc">API + filtros ilimitados</div>
+          <div class="plan-card" onclick="selectPlan(this,'anual')">
+            <div class="plan-badge" style="background:#f59e0b">-34%</div>
+            <div class="plan-card-name">Anual</div>
+            <div class="plan-card-price">R$149<sub>/ano</sub></div>
+            <div class="plan-card-desc">Equivale a R$12,49/mês</div>
           </div>
         </div>
 
-        <button class="submit-btn" onclick="cadastrar()">
+        <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Criar conta grátis →</span>
         </button>
@@ -779,14 +636,14 @@ body {
       <!-- Login -->
       <div id="view-entrar" style="display:none">
         <div class="field">
-          <label>E-mail ou WhatsApp</label>
-          <input type="text" id="login-user" placeholder="seu@email.com">
+          <label>E-mail</label>
+          <input type="email" id="login-user" placeholder="seu@email.com">
         </div>
         <div class="field">
           <label>Senha</label>
           <input type="password" id="login-pass" placeholder="••••••••">
         </div>
-        <button class="submit-btn" onclick="entrar()">
+        <button class="submit-btn" id="btn-entrar" onclick="entrar()">
           <div class="spinner" id="spin2"></div>
           <span id="btn2-text">Entrar no painel →</span>
         </button>
@@ -820,7 +677,7 @@ body {
         </div>
       </div>
       <p style="font-size:13px;color:var(--ink3);margin-top:16px">
-        <a href="#" onclick="return false" style="color:var(--g);font-weight:500">Acessar meu painel →</a>
+        <a href="saiuvaga-pagamento.html" style="color:var(--g);font-weight:500">Ativar meu plano →</a>
       </p>
     </div>
 
@@ -828,7 +685,50 @@ body {
 </div>
 
 <script>
-let planoSelecionado = 'morador';
+// ── Supabase ────────────────────────────────────────────────
+const { createClient } = supabase;
+const sb = createClient(
+  'https://mlsqebefrjqbeujkxney.supabase.co',
+  'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
+);
+
+// Redireciona se já logado
+sb.auth.getSession().then(({ data }) => {
+  if (data.session) {
+    window.location.href = 'saiuvaga-pagamento.html';
+  }
+});
+
+// Ouve mudança de auth (callback do Google OAuth)
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    const user = session.user;
+    // Garante registro na tabela users
+    const { data: existe } = await sb
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!existe) {
+      await sb.from('users').insert({
+        id: user.id,
+        email: user.email,
+        nome: user.user_metadata?.full_name || '',
+        whatsapp: '',
+        plano: planoSelecionado,
+        ativo: false,
+      });
+    }
+
+    showSuccess(
+      'Bem-vindo ao SaiuVaga! 🎉',
+      'Conta conectada com Google. Ative seu plano para começar a receber alertas.'
+    );
+  }
+});
+
+let planoSelecionado = 'mensal';
 
 function setTab(id, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
@@ -847,15 +747,26 @@ function selectPlan(el, plano) {
   planoSelecionado = plano;
 }
 
-function setLoading(btnId, spinId, loading) {
-  document.getElementById(spinId).style.display = loading ? 'block' : 'none';
-  document.getElementById(btnId).style.opacity = loading ? '0' : '1';
+function mascaraFone(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 6) v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+  el.value = v;
 }
 
-function showError(msg) {
+function setLoading(btnId, spinId, loading) {
+  const btn = document.getElementById(btnId);
+  document.getElementById(spinId).style.display = loading ? 'block' : 'none';
+  btn.disabled = loading;
+  const textEl = btn.querySelector('span');
+  if (textEl) textEl.style.opacity = loading ? '0' : '1';
+}
+
+function showError(msg, tipo = 'erro') {
   const el = document.getElementById('error-msg');
   el.textContent = msg;
   el.style.display = 'block';
+  el.className = 'error-msg' + (tipo === 'ok' ? ' success-msg' : '');
 }
 
 function hideError() {
@@ -870,6 +781,7 @@ function showSuccess(title, sub) {
   document.getElementById('suc-sub').textContent = sub;
 }
 
+// ── Cadastrar ───────────────────────────────────────────────
 async function cadastrar() {
   const nome  = document.getElementById('reg-nome').value.trim();
   const email = document.getElementById('reg-email').value.trim();
@@ -879,44 +791,118 @@ async function cadastrar() {
   if (!nome || !email || !wpp || !pass) { showError('Preencha todos os campos.'); return; }
   if (pass.length < 8) { showError('A senha precisa ter pelo menos 8 caracteres.'); return; }
 
-  setLoading('btn1-text', 'spin1', true);
+  setLoading('btn-cadastrar', 'spin1', true);
   hideError();
 
-  // Aqui você integra com o Supabase Auth:
-  // const { data, error } = await supabase.auth.signUp({ email, password: pass })
-  // if (!error) await supabase.from('users').insert({ id: data.user.id, email, nome, whatsapp: wpp, plano: planoSelecionado })
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: pass,
+    options: {
+      data: { full_name: nome },
+      emailRedirectTo: 'https://saiuvaga.com.br/saiuvaga-pagamento.html',
+    },
+  });
 
-  await new Promise(r => setTimeout(r, 1500)); // simulação
-  setLoading('btn1-text', 'spin1', false);
-  showSuccess('Conta criada! 🎉', `Enviamos uma confirmação para ${email}. Você vai receber alertas no WhatsApp assim que surgir uma vaga.`);
+  if (error) {
+    setLoading('btn-cadastrar', 'spin1', false);
+    const msgs = {
+      'User already registered': 'Este e-mail já está cadastrado. Faça login.',
+      'Password should be at least 6 characters': 'Senha muito curta. Use pelo menos 8 caracteres.',
+      'Unable to validate email address': 'E-mail inválido.',
+    };
+    showError(msgs[error.message] || error.message);
+    return;
+  }
+
+  // Salva dados extras na tabela users
+  if (data.user) {
+    await sb.from('users').upsert({
+      id: data.user.id,
+      email,
+      nome,
+      whatsapp: wpp.replace(/\D/g, ''),
+      plano: planoSelecionado,
+      ativo: false,
+    }, { onConflict: 'id' });
+  }
+
+  setLoading('btn-cadastrar', 'spin1', false);
+
+  // Se precisar confirmar email
+  if (data.user && !data.session) {
+    showSuccess(
+      'Verifique seu e-mail! 📧',
+      `Enviamos um link de confirmação para ${email}. Clique no link e depois ative seu plano.`
+    );
+  } else {
+    showSuccess(
+      'Conta criada! 🎉',
+      'Agora ative seu plano para começar a receber alertas de imóveis no WhatsApp.'
+    );
+  }
 }
 
+// ── Login ───────────────────────────────────────────────────
 async function entrar() {
-  const user = document.getElementById('login-user').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  if (!user || !pass) { showError('Preencha e-mail e senha.'); return; }
+  const email = document.getElementById('login-user').value.trim();
+  const pass  = document.getElementById('login-pass').value;
 
-  setLoading('btn2-text', 'spin2', true);
+  if (!email || !pass) { showError('Preencha e-mail e senha.'); return; }
+
+  setLoading('btn-entrar', 'spin2', true);
   hideError();
 
-  // const { data, error } = await supabase.auth.signInWithPassword({ email: user, password: pass })
-  await new Promise(r => setTimeout(r, 1200));
-  setLoading('btn2-text', 'spin2', false);
-  showSuccess('Bem-vindo de volta!', 'Redirecionando para o seu painel de alertas.');
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+
+  if (error) {
+    setLoading('btn-entrar', 'spin2', false);
+    const msgs = {
+      'Invalid login credentials': 'E-mail ou senha incorretos.',
+      'Email not confirmed': 'Confirme seu e-mail antes de entrar.',
+    };
+    showError(msgs[error.message] || error.message);
+    return;
+  }
+
+  setLoading('btn-entrar', 'spin2', false);
+
+  // Verifica se é usuário ativo (pagou)
+  const { data: user } = await sb
+    .from('users')
+    .select('ativo, nome')
+    .eq('id', data.user.id)
+    .maybeSingle();
+
+  if (user?.ativo) {
+    showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`, 'Seus alertas estão ativos. Redirecionando...');
+    setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
+  } else {
+    showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas de imóveis.');
+  }
 }
 
-function loginGoogle() {
-  // Integração com Google OAuth via Supabase:
-  // supabase.auth.signInWithOAuth({ provider: 'google' })
-  showSuccess('Conectado com Google!', 'Conta vinculada com sucesso. Seu painel está pronto.');
+// ── Google OAuth ────────────────────────────────────────────
+async function loginGoogle() {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'https://saiuvaga.com.br/saiuvaga-pagamento.html',
+    },
+  });
+  if (error) showError('Erro ao conectar com Google: ' + error.message);
 }
 
-function forgotPass() {
+// ── Esqueci senha ───────────────────────────────────────────
+async function forgotPass() {
   const email = document.getElementById('login-user').value.trim();
-  if (!email) { showError('Digite seu e-mail acima.'); return; }
-  showError('✓ E-mail de redefinição enviado para ' + email);
-  document.getElementById('error-msg').style.background = '#E1F5EE';
-  document.getElementById('error-msg').style.color = '#0F6E56';
+  if (!email) { showError('Digite seu e-mail acima primeiro.'); return; }
+
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://saiuvaga.com.br/saiuvaga-cadastro.html',
+  });
+
+  if (error) { showError('Erro: ' + error.message); return; }
+  showError('✓ E-mail de redefinição enviado para ' + email, 'ok');
 }
 </script>
 </body>
