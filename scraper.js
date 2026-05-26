@@ -1,13 +1,240 @@
-// scraper.js — SaiuVaga (Apify + Supabase + Z-API WhatsApp)
+// scraper.js — SaiuVaga (Apify + Supabase + Z-API + Mercado Pago)
 require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
+const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
+const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
+// ── Clientes ────────────────────────────────────────────────
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+
+const mp = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN,
+});
+
+// ── Servidor Express ────────────────────────────────────────
+const app = express();
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
+
+// ── Rota de saúde ───────────────────────────────────────────
+app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅' }));
+
+// ── Gerar Pix ───────────────────────────────────────────────
+app.post('/api/pagamento/pix', async (req, res) => {
+  try {
+    const { email, nome, cpf, plano = 'mensal' } = req.body;
+
+    if (!email || !nome || !cpf) {
+      return res.status(400).json({ erro: 'email, nome e cpf são obrigatórios' });
+    }
+
+    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valor = valores[plano] || 19.90;
+
+    const payment = new Payment(mp);
+    const result = await payment.create({
+      body: {
+        transaction_amount: valor,
+        description: `SaiuVaga — Plano ${plano}`,
+        payment_method_id: 'pix',
+        payer: {
+          email,
+          first_name: nome.split(' ')[0],
+          last_name: nome.split(' ').slice(1).join(' ') || '-',
+          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
+        },
+      },
+    });
+
+    const pix = result.point_of_interaction?.transaction_data;
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      qr_code: pix?.qr_code,
+      qr_code_base64: pix?.qr_code_base64,
+      copia_cola: pix?.qr_code,
+      expiracao: pix?.ticket_url,
+      valor,
+      plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Pix:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Gerar Boleto ────────────────────────────────────────────
+app.post('/api/pagamento/boleto', async (req, res) => {
+  try {
+    const { email, nome, cpf, cep, plano = 'mensal' } = req.body;
+
+    if (!email || !nome || !cpf || !cep) {
+      return res.status(400).json({ erro: 'email, nome, cpf e cep são obrigatórios' });
+    }
+
+    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valor = valores[plano] || 19.90;
+
+    const payment = new Payment(mp);
+    const result = await payment.create({
+      body: {
+        transaction_amount: valor,
+        description: `SaiuVaga — Plano ${plano}`,
+        payment_method_id: 'bolbradesco',
+        payer: {
+          email,
+          first_name: nome.split(' ')[0],
+          last_name: nome.split(' ').slice(1).join(' ') || '-',
+          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
+          address: { zip_code: cep.replace(/\D/g, '') },
+        },
+      },
+    });
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      boleto_url: result.transaction_details?.external_resource_url,
+      codigo_barras: result.barcode?.content,
+      data_vencimento: result.date_of_expiration,
+      valor,
+      plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Boleto:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Gerar Cartão de Crédito (Checkout Pro) ──────────────────
+app.post('/api/pagamento/cartao', async (req, res) => {
+  try {
+    const { email, nome, plano = 'mensal', user_id } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ erro: 'email é obrigatório' });
+    }
+
+    const valores = { mensal: 19.90, trimestral: 49.90, anual: 149.90 };
+    const valor = valores[plano] || 19.90;
+
+    const preference = new Preference(mp);
+    const result = await preference.create({
+      body: {
+        items: [{
+          title: `SaiuVaga — Plano ${plano}`,
+          quantity: 1,
+          unit_price: valor,
+          currency_id: 'BRL',
+        }],
+        payer: { email, name: nome },
+        back_urls: {
+          success: 'https://saiuvaga.com.br/sucesso.html',
+          failure: 'https://saiuvaga.com.br/erro.html',
+          pending: 'https://saiuvaga.com.br/pendente.html',
+        },
+        auto_return: 'approved',
+        external_reference: user_id || email,
+        notification_url: 'https://saiuvaga-production.up.railway.app/api/webhook/mp',
+      },
+    });
+
+    res.json({
+      preference_id: result.id,
+      checkout_url: result.init_point,
+      sandbox_url: result.sandbox_init_point,
+      valor,
+      plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Cartão:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Webhook Mercado Pago ────────────────────────────────────
+app.post('/api/webhook/mp', async (req, res) => {
+  res.sendStatus(200); // responde rápido pro MP não retentar
+
+  try {
+    const { type, data } = req.body;
+    console.log(`\n📩 Webhook MP: type=${type} id=${data?.id}`);
+
+    if (type !== 'payment' || !data?.id) return;
+
+    // Busca detalhes do pagamento
+    const payment = new Payment(mp);
+    const pag = await payment.get({ id: data.id });
+
+    console.log(`   Status: ${pag.status} | Valor: R$${pag.transaction_amount} | Email: ${pag.payer?.email}`);
+
+    if (pag.status !== 'approved') return;
+
+    const email = pag.payer?.email;
+    if (!email) return;
+
+    // Atualiza usuário como ativo no Supabase
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, whatsapp, nome')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!user) {
+      console.log(`   ⚠️  Usuário não encontrado para ${email}`);
+      return;
+    }
+
+    // Calcula validade conforme valor pago
+    const diasPlano = pag.transaction_amount >= 140 ? 365
+      : pag.transaction_amount >= 45 ? 90 : 30;
+
+    const validade = new Date();
+    validade.setDate(validade.getDate() + diasPlano);
+
+    await supabase
+      .from('users')
+      .update({
+        ativo: true,
+        plano_validade: validade.toISOString(),
+        ultimo_pagamento: new Date().toISOString(),
+        mp_payment_id: String(pag.id),
+      })
+      .eq('id', user.id);
+
+    console.log(`   ✅ Usuário ${email} ativado por ${diasPlano} dias`);
+
+    // Envia WhatsApp de confirmação
+    if (user.whatsapp) {
+      await enviarWhatsApp(
+        user.whatsapp,
+        null,
+        `✅ *Pagamento confirmado!*\n\n` +
+        `Olá ${user.nome || ''}! Seu acesso ao SaiuVaga foi ativado.\n` +
+        `📅 Válido por ${diasPlano} dias.\n\n` +
+        `Você receberá alertas de imóveis assim que houver novidades! 🏠`
+      );
+    }
+
+  } catch (err) {
+    console.error('❌ Erro webhook:', err.message);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// SCRAPER (sem alterações)
+// ─────────────────────────────────────────────────────────────
 
 const BUSCAS = [
   { bairro: 'Pinheiros',     tipo: 'residencial' },
@@ -15,7 +242,6 @@ const BUSCAS = [
   { bairro: 'Faria Lima',    tipo: 'comercial'   },
 ];
 
-// ── Busca imóveis via Apify ─────────────────────────────────
 async function buscarApify(bairro, tipo) {
   console.log(`\n🔍 Buscando: ${bairro}`);
 
@@ -69,7 +295,6 @@ async function buscarApify(bairro, tipo) {
   }
 }
 
-// ── Salva imóveis novos no banco ────────────────────────────
 async function salvarImoveis(imoveis) {
   if (imoveis.length === 0) return 0;
 
@@ -84,28 +309,26 @@ async function salvarImoveis(imoveis) {
   return novos;
 }
 
-// ── Envia alerta via Z-API WhatsApp ─────────────────────────
-async function enviarWhatsApp(telefone, imovel) {
+// Função WhatsApp unificada (alerta de imóvel ou mensagem livre)
+async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   if (!process.env.ZAPI_INSTANCE || !process.env.ZAPI_TOKEN) {
     console.log('   ⚠️  Z-API não configurado');
     return false;
   }
 
-  const mensagem =
+  const mensagem = mensagemLivre || (
     `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
     `🏠 ${imovel.titulo}\n` +
     `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mês\n` +
     `📍 ${imovel.bairro}, SP\n` +
     `🔗 ${imovel.link}\n\n` +
-    `_Responda PARAR para cancelar alertas_`;
+    `_Responda PARAR para cancelar alertas_`
+  );
 
   try {
     await axios.post(
       `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}/send-text`,
-      {
-        phone: telefone,
-        message: mensagem,
-      },
+      { phone: telefone, message: mensagem },
       { timeout: 10000 }
     );
     console.log(`   📲 WhatsApp enviado para ${telefone}`);
@@ -116,21 +339,19 @@ async function enviarWhatsApp(telefone, imovel) {
   }
 }
 
-// ── Verifica filtros e dispara alertas ──────────────────────
 async function verificarAlertas() {
-  // Busca filtros ativos com dados do usuário (whatsapp)
   const { data: filtros } = await supabase
     .from('filtros')
-    .select('*, users(whatsapp)')
+    .select('*, users(whatsapp, ativo)')
     .eq('ativo', true);
 
   if (!filtros || filtros.length === 0) return;
 
   for (const filtro of filtros) {
     const whatsapp = filtro.users?.whatsapp;
-    if (!whatsapp) continue;
+    // Só envia alerta se usuário está ativo (pagou)
+    if (!whatsapp || !filtro.users?.ativo) continue;
 
-    // Imóveis novos dos últimos 10 min que batem com o filtro
     const { data: matches } = await supabase
       .from('imoveis')
       .select('*')
@@ -141,7 +362,6 @@ async function verificarAlertas() {
     if (!matches || matches.length === 0) continue;
 
     for (const imovel of matches) {
-      // Checa se alerta já foi enviado
       const { data: jaEnviado } = await supabase
         .from('alertas')
         .select('id')
@@ -151,24 +371,19 @@ async function verificarAlertas() {
 
       if (jaEnviado) continue;
 
-      // Salva o alerta no banco
       await supabase.from('alertas').insert({
         user_id: filtro.user_id,
         filtro_id: filtro.id,
         imovel_id: imovel.id,
       });
 
-      // Envia WhatsApp
       await enviarWhatsApp(whatsapp, imovel);
       console.log(`   🔔 Alerta: ${imovel.titulo} → ${whatsapp}`);
-
-      // Pausa de 1s entre mensagens para não sobrecarregar
       await new Promise(r => setTimeout(r, 1000));
     }
   }
 }
 
-// ── Roda o scraper completo ─────────────────────────────────
 async function rodarScraper() {
   console.log(`\n🚀 SaiuVaga — ${new Date().toLocaleString('pt-BR')}`);
   let total = 0;
@@ -183,8 +398,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
-// Roda a cada 5 minutos
 cron.schedule('*/5 * * * *', rodarScraper);
-
-// Roda imediatamente ao iniciar
 rodarScraper();
