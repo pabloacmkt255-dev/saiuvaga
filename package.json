@@ -1,7 +1,9 @@
 {
   "name": "saiuvaga",
   "version": "1.0.0",
-  "scripts": { "start": "node scraper.js" },
+  "scripts": {
+    "start": "node server.js & node scraper.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",
     "axios": "^1.0.0",
