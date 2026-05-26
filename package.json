@@ -1,14 +1,16 @@
 {
   "name": "saiuvaga",
   "version": "1.0.0",
+  "main": "scraper.js",
   "scripts": {
-    "start": "node server.js & node scraper.js"
+    "start": "node scraper.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.0.0",
-    "axios": "^1.0.0",
-    "cheerio": "^1.0.0",
-    "dotenv": "^16.0.0",
-    "node-cron": "^3.0.0"
+    "axios": "^1.6.0",
+    "node-cron": "^3.0.3",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mercadopago": "^2.0.0"
   }
 }
