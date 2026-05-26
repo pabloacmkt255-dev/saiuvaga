@@ -570,7 +570,7 @@ body {
     <div id="main-form">
       <div class="form-head">
         <div class="form-title" id="form-title">Criar sua conta</div>
-        <div class="form-sub" id="form-sub">7 dias grátis. Sem cartão de crédito.</div>
+        <div class="form-sub" id="form-sub">7 dias grátis para testar. Sem cartão de crédito.</div>
       </div>
 
       <div class="tabs">
@@ -618,11 +618,11 @@ body {
             <div class="plan-card-price">R$19<sub>/mês</sub></div>
             <div class="plan-card-desc">Alertas ilimitados em tempo real</div>
           </div>
-          <div class="plan-card" onclick="selectPlan(this,'anual')">
-            <div class="plan-badge" style="background:#f59e0b">-34%</div>
-            <div class="plan-card-name">Anual</div>
-            <div class="plan-card-price">R$149<sub>/ano</sub></div>
-            <div class="plan-card-desc">Equivale a R$12,49/mês</div>
+          <div class="plan-card" onclick="selectPlan(this,'trimestral')">
+            <div class="plan-badge" style="background:#f59e0b">1 mês grátis</div>
+            <div class="plan-card-name">Trimestral</div>
+            <div class="plan-card-price">R$38<sub>/3 meses</sub></div>
+            <div class="plan-card-desc">Equivale a R$12,67/mês</div>
           </div>
         </div>
 
@@ -677,7 +677,7 @@ body {
         </div>
       </div>
       <p style="font-size:13px;color:var(--ink3);margin-top:16px">
-        <a href="saiuvaga-pagamento.html" style="color:var(--g);font-weight:500">Ativar meu plano →</a>
+        <a href="saiuvaga-pagamento.html" style="color:var(--g);font-weight:500">Configurar meus alertas →</a>
       </p>
     </div>
 
@@ -828,16 +828,27 @@ async function cadastrar() {
 
   setLoading('btn-cadastrar', 'spin1', false);
 
+  // Ativa trial de 7 dias automaticamente
+  if (data.user) {
+    try {
+      await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: data.user.id, email }),
+      });
+    } catch(e) { console.log('Trial será ativado em breve'); }
+  }
+
   // Se precisar confirmar email
   if (data.user && !data.session) {
     showSuccess(
       'Verifique seu e-mail! 📧',
-      `Enviamos um link de confirmação para ${email}. Clique no link e depois ative seu plano.`
+      `Enviamos um link de confirmação para ${email}. Após confirmar, seu trial de 7 dias será ativado automaticamente.`
     );
   } else {
     showSuccess(
-      'Conta criada! 🎉',
-      'Agora ative seu plano para começar a receber alertas de imóveis no WhatsApp.'
+      'Trial ativado! 🎉',
+      'Seus 7 dias grátis começaram agora. Você receberá alertas de imóveis no WhatsApp assim que surgir uma vaga!'
     );
   }
 }
