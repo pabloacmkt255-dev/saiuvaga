@@ -718,9 +718,35 @@ const sb = createClient(
 );
 
 // Redireciona se já logado
-sb.auth.getSession().then(({ data }) => {
-  if (data.session) {
-    window.location.href = 'saiuvaga-pagamento.html';
+sb.auth.getSession().then(async ({ data }) => {
+  if (!data.session) return; // não logado, fica na página
+
+  const user = data.session.user;
+
+  // Verifica status do trial/plano
+  try {
+    const res = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${user.id}`);
+    const status = await res.json();
+
+    if (status.ativo) {
+      // Trial ou plano ativo — vai para página de configuração de alertas (não pagamento)
+      // Por agora mostra mensagem de boas-vindas
+      document.getElementById('main-form').style.display = 'none';
+      document.getElementById('success-view').style.display = 'block';
+      document.getElementById('suc-title').textContent = status.em_trial
+        ? `Trial ativo — ${status.dias_restantes} dias restantes 🎉`
+        : 'Plano ativo ✅';
+      document.getElementById('suc-sub').textContent = status.em_trial
+        ? 'Seus alertas estão configurados. Você receberá notificações no WhatsApp!'
+        : 'Seu plano está ativo. Continue recebendo alertas no WhatsApp!';
+    } else if (status.trial_usado) {
+      // Trial expirado — aí sim vai para pagamento
+      window.location.href = 'saiuvaga-pagamento.html';
+    }
+    // Se trial_usado = false e não ativo = novo usuário, fica na página de cadastro
+  } catch(e) {
+    // Se erro na API, não redireciona
+    console.log('Status check failed:', e);
   }
 });
 
@@ -728,14 +754,16 @@ sb.auth.getSession().then(({ data }) => {
 sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
     const user = session.user;
+
     // Garante registro na tabela users
     const { data: existe } = await sb
       .from('users')
-      .select('id')
+      .select('id, trial_usado, ativo')
       .eq('id', user.id)
       .maybeSingle();
 
     if (!existe) {
+      // Novo usuário via Google — registra e ativa trial
       await sb.from('users').insert({
         id: user.id,
         email: user.email,
@@ -744,12 +772,27 @@ sb.auth.onAuthStateChange(async (event, session) => {
         plano: planoSelecionado,
         ativo: false,
       });
-    }
 
-    showSuccess(
-      'Bem-vindo ao SaiuVaga! 🎉',
-      'Conta conectada com Google. Ative seu plano para começar a receber alertas.'
-    );
+      // Ativa trial
+      try {
+        await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id, email: user.email }),
+        });
+      } catch(e) { console.log('Trial será ativado em breve'); }
+
+      showSuccess(
+        'Trial ativado! 🎉',
+        'Seus 7 dias grátis começaram. Você receberá alertas no WhatsApp assim que surgir uma vaga!'
+      );
+    } else if (existe.trial_usado && !existe.ativo) {
+      // Trial expirado — redireciona para pagamento
+      window.location.href = 'saiuvaga-pagamento.html';
+    } else if (existe.ativo) {
+      // Já tem plano ativo
+      showSuccess('Bem-vindo de volta! 👋', 'Seus alertas continuam ativos.');
+    }
   }
 });
 
