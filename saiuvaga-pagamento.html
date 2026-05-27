@@ -64,6 +64,31 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);min-height:100vh;color
 .success-view{display:none;text-align:center;padding:20px 0}
 .success-ico{width:64px;height:64px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;color:var(--gdk)}
 </style>
+
+  <!-- Google Analytics + Google Ads -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-W12FH3ZNDP');
+    gtag('config', 'AW-18192818213');
+  </script>
+  <!-- Facebook Pixel -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window,document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '26792201447075176');
+  fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=26792201447075176&ev=PageView&noscript=1"/></noscript>
 </head>
 <body>
 <div class="wrap">
@@ -189,6 +214,9 @@ let planoAtual = 'mensal';
 let precoAtual = 19.90;
 
 function selectPlan(plano, preco) {
+  // Tracking: ViewContent ao trocar plano
+  if (typeof gtag !== 'undefined') gtag('event', 'view_item', {'currency': 'BRL', 'value': preco, 'items': [{'item_name': 'SaiuVaga ' + plano}]});
+  if (typeof fbq !== 'undefined') fbq('track', 'ViewContent', {'content_name': 'Plano ' + plano, 'value': preco, 'currency': 'BRL'});
   planoAtual = plano;
   precoAtual = preco;
   document.querySelectorAll('.plan').forEach(p => p.classList.remove('on'));
@@ -228,6 +256,12 @@ function getDados() {
 }
 
 async function pagarPix() {
+  // Tracking: InitiateCheckout
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'begin_checkout', {'currency': 'BRL', 'value': precoAtual});
+    gtag('event', 'conversion', {'send_to': 'AW-18192818213/checkout', 'value': precoAtual, 'currency': 'BRL'});
+  }
+  if (typeof fbq !== 'undefined') fbq('track', 'InitiateCheckout', {'value': precoAtual, 'currency': 'BRL'});
   const dados = getDados();
   if (!dados) return;
 
@@ -245,6 +279,13 @@ async function pagarPix() {
     // Exibe QR Code
     document.getElementById('loading-card').style.display = 'none';
     document.getElementById('pix-card').style.display = 'block';
+
+    // Tracking: Purchase (Pix gerado = intenção de compra confirmada)
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'purchase', {'currency': 'BRL', 'value': precoAtual, 'transaction_id': data.id, 'items': [{'item_name': 'SaiuVaga ' + planoAtual}]});
+      gtag('event', 'conversion', {'send_to': 'AW-18192818213/purchase', 'value': precoAtual, 'currency': 'BRL', 'transaction_id': String(data.id)});
+    }
+    if (typeof fbq !== 'undefined') fbq('track', 'Purchase', {'value': precoAtual, 'currency': 'BRL'});
 
     if (data.qr_code_base64) {
       document.getElementById('pix-img').src = 'data:image/png;base64,' + data.qr_code_base64;
@@ -293,6 +334,12 @@ async function pagarBoleto() {
 }
 
 async function pagarCartao() {
+  // Tracking: InitiateCheckout
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'begin_checkout', {'currency': 'BRL', 'value': precoAtual});
+    gtag('event', 'conversion', {'send_to': 'AW-18192818213/checkout', 'value': precoAtual, 'currency': 'BRL'});
+  }
+  if (typeof fbq !== 'undefined') fbq('track', 'InitiateCheckout', {'value': precoAtual, 'currency': 'BRL'});
   const dados = getDados();
   if (!dados) return;
 
