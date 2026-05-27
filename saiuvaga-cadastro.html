@@ -482,6 +482,31 @@ body {
 
 .mobile-logo { display: none; }
 </style>
+
+  <!-- Google Analytics + Google Ads -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-W12FH3ZNDP');
+    gtag('config', 'AW-18192818213');
+  </script>
+  <!-- Facebook Pixel -->
+  <script>
+  !function(f,b,e,v,n,t,s)
+  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+  n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];
+  s.parentNode.insertBefore(t,s)}(window,document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '26792201447075176');
+  fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=26792201447075176&ev=PageView&noscript=1"/></noscript>
 </head>
 <body>
 <div class="bg-pattern"></div>
@@ -828,6 +853,16 @@ async function cadastrar() {
 
   setLoading('btn-cadastrar', 'spin1', false);
 
+  // Tracking: Lead
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'conversion', {'send_to': 'AW-18192818213/lead'});
+    gtag('event', 'sign_up', {'method': 'email'});
+  }
+  if (typeof fbq !== 'undefined') {
+    fbq('track', 'Lead');
+    fbq('track', 'CompleteRegistration');
+  }
+
   // Ativa trial de 7 dias automaticamente
   if (data.user) {
     try {
@@ -894,6 +929,10 @@ async function entrar() {
 
 // ── Google OAuth ────────────────────────────────────────────
 async function loginGoogle() {
+  // Tracking: Google OAuth click
+  if (typeof gtag !== 'undefined') gtag('event', 'sign_up', {'method': 'google'});
+  if (typeof fbq !== 'undefined') fbq('track', 'Lead');
+
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
