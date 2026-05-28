@@ -320,6 +320,112 @@ app.post('/api/webhook/mp', async (req, res) => {
   }
 });
 
+
+// ── Chatbot WhatsApp (Z-API + Claude) ──────────────────────
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  res.sendStatus(200);
+
+  try {
+    const body = req.body;
+    const phone = body.phone || body.from;
+    const text  = (body.text?.message || body.body || '').trim();
+
+    if (!phone || !text) return;
+    if (body.isGroup || body.fromMe) return; // ignora grupos e mensagens próprias
+
+    console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
+
+    // Busca dados do usuário no Supabase
+    const numero = phone.replace(/\D/g, '').replace(/^55/, '');
+    const { data: user } = await supabase
+      .from('users')
+      .select('nome, email, ativo, trial_usado, plano, plano_validade')
+      .ilike('whatsapp', `%${numero}%`)
+      .maybeSingle();
+
+    const agora = new Date();
+    const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
+    const ativo = user?.ativo && validade && validade > agora;
+    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
+
+    // Contexto do usuário para a IA
+    let contextoUsuario = 'Usuário não cadastrado no SaiuVaga.';
+    if (user) {
+      if (ativo && user.plano === 'trial') {
+        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: trial ativo com ${diasRestantes} dias restantes.`;
+      } else if (ativo) {
+        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: plano ${user.plano} ativo com ${diasRestantes} dias restantes.`;
+      } else if (user.trial_usado) {
+        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: trial expirado, aguardando pagamento.`;
+      } else {
+        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: cadastrado mas ainda não ativou o trial.`;
+      }
+    }
+
+    // Resposta via Google Gemini
+    const prompt = `Você é o assistente virtual do SaiuVaga, um serviço de alertas de imóveis em tempo real via WhatsApp em São Paulo.
+
+INFORMAÇÕES DO PRODUTO:
+- Monitora +100 portais (OLX, ZAP, Viva Real e outros) 24 horas por dia
+- Avisa o usuário no WhatsApp em menos de 2 minutos quando surge um imóvel com seus critérios
+- Trial gratuito: 7 dias, sem cartão de crédito
+- Plano Mensal: R$19/mês
+- Plano Trimestral: R$38/3 meses (1 mês grátis)
+- Site: saiuvaga.com.br
+- Para cadastrar: saiuvaga.com.br/saiuvaga-cadastro.html
+
+CONTEXTO DO USUÁRIO ATUAL:
+${contextoUsuario}
+
+REGRAS:
+- Responda em português brasileiro, de forma simpática e direta
+- Máximo 3 parágrafos curtos — WhatsApp é informal
+- Use emojis com moderação
+- Se não souber responder, diga que vai verificar e peça para aguardar
+- Não invente informações sobre o produto
+- Se perguntarem sobre preço, sempre mencione o trial gratuito primeiro
+- Se o trial expirou, incentive o pagamento gentilmente
+- Nunca seja robótico — seja humano e empático
+
+MENSAGEM DO USUÁRIO:
+${text}
+
+Responda como assistente do SaiuVaga:`;
+
+    const resposta = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
+        }),
+      }
+    );
+
+    const data = await resposta.json();
+    const mensagem = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!mensagem) {
+      console.log('   ⚠️ Claude não respondeu');
+      return;
+    }
+
+    // Envia resposta via Z-API
+    await axios.post(
+      `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}/send-text`,
+      { phone, message: mensagem },
+      { timeout: 10000 }
+    );
+
+    console.log(`   🤖 Resposta enviada para ${phone}`);
+
+  } catch (err) {
+    console.error('❌ Erro chatbot:', err.message);
+  }
+});
+
 // ─────────────────────────────────────────────────────────────
 // SCRAPER (sem alterações)
 // ─────────────────────────────────────────────────────────────
