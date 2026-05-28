@@ -702,7 +702,7 @@ body {
         </div>
       </div>
       <p style="font-size:13px;color:var(--ink3);margin-top:16px">
-        <a href="saiuvaga-pagamento.html" style="color:var(--g);font-weight:500">Configurar meus alertas →</a>
+        <a href="#" onclick="return false" style="color:var(--g);font-weight:500">Aguardando confirmação...</a>
       </p>
     </div>
 
@@ -867,7 +867,7 @@ async function cadastrar() {
     password: pass,
     options: {
       data: { full_name: nome },
-      emailRedirectTo: 'https://saiuvaga.com.br/saiuvaga-pagamento.html',
+      emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html',
     },
   });
 
@@ -903,32 +903,26 @@ async function cadastrar() {
   }
   if (typeof fbq !== 'undefined') {
     fbq('track', 'Lead');
-    fbq('track', 'CompleteRegistration');
   }
 
-  // Ativa trial de 7 dias automaticamente
+  // Salva dados extras mas NÃO ativa trial ainda — aguarda confirmação de e-mail
   if (data.user) {
-    try {
-      await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: data.user.id, email }),
-      });
-    } catch(e) { console.log('Trial será ativado em breve'); }
+    await sb.from('users').upsert({
+      id: data.user.id,
+      email,
+      nome,
+      whatsapp: wpp.replace(/\D/g, ''),
+      plano: planoSelecionado,
+      ativo: false,
+      trial_usado: false,
+    }, { onConflict: 'id' });
   }
 
-  // Se precisar confirmar email
-  if (data.user && !data.session) {
-    showSuccess(
-      'Verifique seu e-mail! 📧',
-      `Enviamos um link de confirmação para ${email}. Após confirmar, seu trial de 7 dias será ativado automaticamente.`
-    );
-  } else {
-    showSuccess(
-      'Trial ativado! 🎉',
-      'Seus 7 dias grátis começaram agora. Você receberá alertas de imóveis no WhatsApp assim que surgir uma vaga!'
-    );
-  }
+  // Sempre vai precisar confirmar e-mail
+  showSuccess(
+    'Confirme seu e-mail! 📧',
+    `Enviamos um link de confirmação para ${email}. Clique no link para ativar seus 7 dias grátis.`
+  );
 }
 
 // ── Login ───────────────────────────────────────────────────
