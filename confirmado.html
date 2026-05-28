@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Confirmando seu acesso</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Google Analytics + Google Ads -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-W12FH3ZNDP');
+  gtag('config', 'AW-18192818213');
+</script>
+<!-- Facebook Pixel -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window,document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '26792201447075176');
+fbq('track', 'PageView');
+</script>
+
+<style>
+:root{--g:#1D9E75;--gdk:#0B6B4E;--glt:#E0F5EE;--amb:#F5A623;--ink:#0D110F;--ink3:#6B7570;--bg:#F4F6F4;--wh:#fff;--ln:#DDE4DE;--r:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px;-webkit-font-smoothing:antialiased}
+
+.card{background:var(--wh);border:1px solid var(--ln);border-radius:20px;padding:48px 40px;max-width:460px;width:100%;text-align:center}
+
+.icon{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px}
+.icon-loading{background:#f0fdf4;animation:pulse 1.5s ease-in-out infinite}
+.icon-success{background:var(--glt);animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+.icon-error{background:#fef2f2}
+
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.95)}}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+
+.logo{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:32px;font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;color:var(--ink)}
+.logo-mark{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:14px;height:14px}
+
+.title{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--ink);margin-bottom:8px}
+.sub{font-size:14px;color:var(--ink3);line-height:1.6;margin-bottom:28px}
+
+.spinner{width:28px;height:28px;border:3px solid var(--ln);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.features{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;text-align:left}
+.feature{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink)}
+.feature-dot{width:20px;height:20px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+
+.btn{display:inline-block;background:var(--g);color:#fff;padding:14px 32px;border-radius:var(--r);text-decoration:none;font-weight:600;font-size:15px;font-family:'Plus Jakarta Sans',sans-serif;transition:background .2s}
+.btn:hover{background:var(--gdk)}
+.btn-outline{display:inline-block;border:1.5px solid var(--ln);color:var(--ink3);padding:12px 24px;border-radius:var(--r);text-decoration:none;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;margin-top:10px}
+
+.trial-badge{display:inline-flex;align-items:center;gap:6px;background:var(--glt);border:1px solid rgba(29,158,117,.2);border-radius:99px;padding:6px 16px;font-size:13px;font-weight:600;color:var(--gdk);margin-bottom:20px}
+.pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 1.5s infinite}
+
+.wpp-preview{background:#ECE5DD;border-radius:12px;overflow:hidden;max-width:260px;margin:20px auto 0;text-align:left}
+.wpp-bar{background:#075E54;padding:8px 12px;display:flex;align-items:center;gap:6px}
+.wpp-av{width:24px;height:24px;border-radius:50%;background:#128C7E;display:flex;align-items:center;justify-content:center;font-size:11px}
+.wpp-name{font-size:11px;font-weight:600;color:#fff}
+.wpp-body{padding:10px}
+.bubble{background:#fff;border-radius:0 8px 8px 8px;padding:8px 10px;font-size:11px;line-height:1.5;color:#333;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.bubble-time{font-size:9px;color:#999;text-align:right;margin-top:2px}
+
+.error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r);padding:14px;font-size:13px;color:#b91c1c;margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 18 18" fill="none">
+        <circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/>
+        <line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    SaiuVaga
+  </div>
+
+  <!-- Estado: carregando -->
+  <div id="state-loading">
+    <div class="icon icon-loading">
+      <div class="spinner"></div>
+    </div>
+    <div class="title">Confirmando seu acesso...</div>
+    <div class="sub">Aguarde um momento enquanto verificamos seu e-mail e ativamos seu trial.</div>
+  </div>
+
+  <!-- Estado: sucesso -->
+  <div id="state-success" style="display:none">
+    <div class="icon icon-success">✓</div>
+    <div class="trial-badge"><div class="pulse-dot"></div>Trial de 7 dias ativado!</div>
+    <div class="title">E-mail confirmado!</div>
+    <div class="sub">Seus 7 dias grátis começaram agora. Configure seus alertas e receba imóveis no WhatsApp em tempo real.</div>
+
+    <div class="features">
+      <div class="feature"><div class="feature-dot">🔍</div>Monitoramento de +100 portais em SP</div>
+      <div class="feature"><div class="feature-dot">⚡</div>Alertas em menos de 2 minutos</div>
+      <div class="feature"><div class="feature-dot">📱</div>Notificação direto no WhatsApp</div>
+    </div>
+
+    <div class="wpp-preview">
+      <div class="wpp-bar">
+        <div class="wpp-av">🏠</div>
+        <div class="wpp-name">SaiuVaga</div>
+      </div>
+      <div class="wpp-body">
+        <div class="bubble">
+          <strong>🚨 Nova vaga — Pinheiros!</strong><br>
+          Ap 2q · 55m² · R$1.650/mês<br>
+          🔗 ver imóvel →
+          <div class="bubble-time">agora ✓✓</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <a href="saiuvaga-cadastro.html" class="btn">Configurar meus alertas →</a>
+      <br>
+      <a href="saiuvaga-pagamento.html" class="btn-outline">Ver planos</a>
+    </div>
+  </div>
+
+  <!-- Estado: erro -->
+  <div id="state-error" style="display:none">
+    <div class="icon icon-error">⚠️</div>
+    <div class="title">Link inválido ou expirado</div>
+    <div class="error-box" id="error-msg">O link de confirmação expirou ou já foi usado.</div>
+    <div class="sub">Links de confirmação expiram em 24 horas. Solicite um novo abaixo.</div>
+    <a href="saiuvaga-cadastro.html" class="btn">Voltar ao cadastro →</a>
+  </div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://mlsqebefrjqbeujkxney.supabase.co',
+  'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
+);
+
+async function confirmar() {
+  try {
+    // Supabase processa o token automaticamente via URL hash
+    const { data: { session }, error } = await sb.auth.getSession();
+
+    if (error || !session) {
+      showError('Link de confirmação inválido ou expirado. Por favor, solicite um novo cadastro.');
+      return;
+    }
+
+    const user = session.user;
+
+    // Verifica se já tem trial ativo
+    const { data: userData } = await sb
+      .from('users')
+      .select('id, trial_usado, ativo, nome')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // Garante que o usuário existe na tabela
+    if (!userData) {
+      await sb.from('users').insert({
+        id: user.id,
+        email: user.email,
+        nome: user.user_metadata?.full_name || '',
+        whatsapp: '',
+        plano: 'trial',
+        ativo: false,
+        trial_usado: false,
+      });
+    }
+
+    if (userData?.trial_usado) {
+      // Trial já usado — mostra sucesso sem reativar
+      showSuccess();
+      return;
+    }
+
+    // Ativa o trial
+    const res = await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, email: user.email }),
+    });
+
+    const result = await res.json();
+
+    if (result.ok || result.ja_usou) {
+      // Tracking: trial ativado
+      if (typeof gtag !== 'undefined') {
+        gtag('event', 'conversion', {'send_to': 'AW-18192818213/lead'});
+        gtag('event', 'sign_up', {'method': 'email_confirmed'});
+      }
+      if (typeof fbq !== 'undefined') {
+        fbq('track', 'CompleteRegistration');
+        fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19});
+      }
+      showSuccess();
+    } else {
+      showError(result.erro || 'Erro ao ativar trial. Entre em contato.');
+    }
+
+  } catch (err) {
+    showError('Erro inesperado: ' + err.message);
+  }
+}
+
+function showSuccess() {
+  document.getElementById('state-loading').style.display = 'none';
+  document.getElementById('state-success').style.display = 'block';
+}
+
+function showError(msg) {
+  document.getElementById('state-loading').style.display = 'none';
+  document.getElementById('state-error').style.display = 'block';
+  document.getElementById('error-msg').textContent = msg;
+}
+
+// Executa ao carregar
+confirmar();
+</script>
+</body>
+</html>
