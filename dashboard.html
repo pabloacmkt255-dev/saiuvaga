@@ -570,7 +570,7 @@ async function loadUsers() {
   const { data, error } = await sb
     .from('users')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('criado_em', { ascending: false });
 
   if (error) {
     showError(`Erro ao carregar usuários: ${error.message} (código: ${error.code})`);
@@ -598,8 +598,8 @@ function renderMetrics(users) {
   const trials = users.filter(u => u.plano === 'trial' && u.ativo && new Date(u.plano_validade) > agora).length;
   const pagantes = users.filter(u => u.ativo && u.plano !== 'trial' && new Date(u.plano_validade) > agora).length;
   const expirados = users.filter(u => u.trial_usado && !u.ativo).length;
-  const cadastrosHoje = users.filter(u => new Date(u.created_at) >= hoje).length;
-  const cadastrosSemana = users.filter(u => new Date(u.created_at) >= semana).length;
+  const cadastrosHoje = users.filter(u => new Date(u.criado_em) >= hoje).length;
+  const cadastrosSemana = users.filter(u => new Date(u.criado_em) >= semana).length;
 
   // MRR estimado
   const mensais = users.filter(u => u.ativo && u.plano === 'mensal').length;
@@ -625,7 +625,7 @@ function renderChart(users) {
     const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
     const d2 = new Date(d); d2.setHours(23,59,59,999);
     const count = users.filter(u => {
-      const c = new Date(u.created_at);
+      const c = new Date(u.criado_em);
       return c >= d && c <= d2;
     }).length;
     dias.push({ label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0,3), count });
@@ -702,7 +702,7 @@ function renderUsers(users) {
       <td>${statusPill}</td>
       <td>${trialPill}</td>
       <td class="date">${validade ? `${fmt(validade)} (${diasRestantes}d)` : '—'}</td>
-      <td class="date">${fmtFull(u.created_at)}</td>
+      <td class="date">${fmtFull(u.criado_em)}</td>
       <td class="date">${fmtFull(u.ultimo_pagamento)}</td>
     </tr>`;
   }).join('');
