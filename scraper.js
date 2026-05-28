@@ -51,7 +51,6 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
     `_Responda PARAR para cancelar alertas_`
   );
 
-  // Formata número: garante 55 + DDD + número
   const numero = telefone.replace(/\D/g, '');
   const numeroFormatado = numero.startsWith('55') ? numero : `55${numero}`;
 
@@ -531,16 +530,16 @@ app.get('/api/evolution/status', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// SCRAPER
+// SCRAPER — Apify Brazil Real Estate Scraper (OLX, ZAP, VivaReal)
 // ─────────────────────────────────────────────────────────────
 
 const BUSCAS = [
-  { bairro: 'Pinheiros',     tipo: 'residencial' },
-  { bairro: 'Vila Madalena', tipo: 'residencial' },
-  { bairro: 'Faria Lima',    tipo: 'comercial'   },
+  { bairro: 'Pinheiros',     region: 'pinheiros'     },
+  { bairro: 'Vila Madalena', region: 'vila-madalena' },
+  { bairro: 'Faria Lima',    region: 'faria-lima'    },
 ];
 
-async function buscarApify(bairro, tipo) {
+async function buscarApify(bairro, region) {
   console.log(`\n🔍 Buscando: ${bairro}`);
 
   if (!process.env.APIFY_TOKEN) {
@@ -550,12 +549,14 @@ async function buscarApify(bairro, tipo) {
 
   try {
     const run = await axios.post(
-      `https://api.apify.com/v2/acts/epctex~olx-scraper/runs`,
+      `https://api.apify.com/v2/acts/viralanalyzer~brazil-real-estate-scraper/runs`,
       {
-        startUrls: [{
-          url: `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`
-        }],
-        maxItems: 20,
+        transactionType: 'rent',
+        state: 'sp',
+        city: 'sao-paulo',
+        region: region,
+        maxListings: 20,
+        includeDescription: false,
       },
       {
         headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` },
@@ -565,7 +566,10 @@ async function buscarApify(bairro, tipo) {
     );
 
     const datasetId = run.data?.data?.defaultDatasetId;
-    if (!datasetId) return [];
+    if (!datasetId) {
+      console.log('   ⚠️  datasetId não retornado');
+      return [];
+    }
 
     const results = await axios.get(
       `https://api.apify.com/v2/datasets/${datasetId}/items`,
@@ -578,8 +582,8 @@ async function buscarApify(bairro, tipo) {
         titulo: item.title,
         preco: parseInt(String(item.price).replace(/\D/g, '')) || 0,
         bairro,
-        tipo,
-        portal: 'OLX',
+        tipo: 'residencial',
+        portal: item.source || 'OLX',
         link: item.url.split('?')[0],
       }))
       .filter(i => i.preco > 0);
@@ -656,7 +660,7 @@ async function rodarScraper() {
   let total = 0;
 
   for (const b of BUSCAS) {
-    const imoveis = await buscarApify(b.bairro, b.tipo);
+    const imoveis = await buscarApify(b.bairro, b.region);
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
   }
