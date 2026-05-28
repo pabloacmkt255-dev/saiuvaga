@@ -366,30 +366,33 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
     const body = req.body;
 
-    // LOG TEMPORÁRIO — remover depois de confirmar o formato
-    console.log('=== WEBHOOK BODY ===');
-    console.log(JSON.stringify(body, null, 2));
-    console.log('===================');
-
     // Formato Evolution API v2
-    const phone = body?.data?.key?.remoteJid?.replace('@s.whatsapp.net', '')
+    const remoteJid = body?.data?.key?.remoteJid || body?.data?.remoteJid || '';
+
+    // Ignora grupos e mensagens próprias logo no início
+    if (body?.data?.key?.fromMe) return;
+    if (remoteJid.includes('@g.us')) return;
+
+    // Extrai phone — suporta @s.whatsapp.net e @lid
+    const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '')
       || body?.phone
       || body?.from;
+
     const text = (
       body?.data?.message?.conversation ||
       body?.data?.message?.extendedTextMessage?.text ||
+      body?.data?.message?.imageMessage?.caption ||
+      body?.message?.conversation ||
       body?.text?.message ||
       body?.body || ''
     ).trim();
 
+    console.log(`\n📩 Webhook recebido — phone=${phone} text="${text}"`);
+
     if (!phone || !text) {
-      console.log(`   ⚠️ phone ou text vazio — phone=${phone} text="${text}"`);
+      console.log(`   ⚠️ phone ou text vazio, ignorando`);
       return;
     }
-
-    // Ignora grupos e mensagens próprias
-    if (body?.data?.key?.fromMe) return;
-    if (phone.includes('@g.us')) return;
 
     console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
 
