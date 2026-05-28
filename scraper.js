@@ -367,6 +367,11 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
     const body = req.body;
 
+    // LOG TEMPORÁRIO — remover depois de confirmar o formato
+    console.log('=== WEBHOOK BODY ===');
+    console.log(JSON.stringify(body, null, 2));
+    console.log('===================');
+
     // Formato Evolution API v2
     const phone = body?.data?.key?.remoteJid?.replace('@s.whatsapp.net', '')
       || body?.phone
@@ -378,7 +383,10 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
       body?.body || ''
     ).trim();
 
-    if (!phone || !text) return;
+    if (!phone || !text) {
+      console.log(`   ⚠️ phone ou text vazio — phone=${phone} text="${text}"`);
+      return;
+    }
 
     // Ignora grupos e mensagens próprias
     if (body?.data?.key?.fromMe) return;
