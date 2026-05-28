@@ -1,4 +1,4 @@
-// scraper.js — SaiuVaga (Apify + Supabase + Z-API + Mercado Pago)
+// scraper.js — SaiuVaga (Apify + Supabase + Evolution API + Mercado Pago)
 require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
@@ -15,6 +15,11 @@ const supabase = createClient(
 const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
+
+// ── Config Evolution API ─────────────────────────────────────
+const EVOLUTION_URL = process.env.EVOLUTION_URL || 'https://evolution-api-production-b0b4a.up.railway.app';
+const EVOLUTION_KEY = process.env.EVOLUTION_KEY || 'saiuvaga2024evolution';
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'saiuvaga';
 
 // ── Servidor Express ────────────────────────────────────────
 const app = express();
@@ -35,13 +40,50 @@ app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 // ── Rota de saúde ───────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅' }));
 
+// ── Função WhatsApp unificada (Evolution API) ────────────────
+async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
+  const mensagem = mensagemLivre || (
+    `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
+    `🏠 ${imovel.titulo}\n` +
+    `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mês\n` +
+    `📍 ${imovel.bairro}, SP\n` +
+    `🔗 ${imovel.link}\n\n` +
+    `_Responda PARAR para cancelar alertas_`
+  );
+
+  // Formata número: garante 55 + DDD + número
+  const numero = telefone.replace(/\D/g, '');
+  const numeroFormatado = numero.startsWith('55') ? numero : `55${numero}`;
+
+  try {
+    await axios.post(
+      `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
+      {
+        number: numeroFormatado,
+        text: mensagem,
+      },
+      {
+        headers: {
+          'apikey': EVOLUTION_KEY,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+    console.log(`   📲 WhatsApp enviado para ${telefone}`);
+    return true;
+  } catch (err) {
+    console.error(`   ✗ Erro Evolution API: ${err.message}`);
+    return false;
+  }
+}
+
 // ── Ativar trial de 7 dias ──────────────────────────────────
 app.post('/api/trial/ativar', async (req, res) => {
   try {
     const { user_id, email } = req.body;
     if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
 
-    // Verifica se já usou trial
     const query = user_id
       ? supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('id', user_id).maybeSingle()
       : supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('email', email).maybeSingle();
@@ -94,7 +136,6 @@ app.get('/api/usuario/status', async (req, res) => {
     const validade = user.plano_validade ? new Date(user.plano_validade) : null;
     const ativo = user.ativo && validade && validade > agora;
 
-    // Se expirou, desativa automaticamente
     if (user.ativo && validade && validade <= agora) {
       await supabase.from('users').update({ ativo: false }).eq('id', user.id);
     }
@@ -254,7 +295,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
 
 // ── Webhook Mercado Pago ────────────────────────────────────
 app.post('/api/webhook/mp', async (req, res) => {
-  res.sendStatus(200); // responde rápido pro MP não retentar
+  res.sendStatus(200);
 
   try {
     const { type, data } = req.body;
@@ -262,7 +303,6 @@ app.post('/api/webhook/mp', async (req, res) => {
 
     if (type !== 'payment' || !data?.id) return;
 
-    // Busca detalhes do pagamento
     const payment = new Payment(mp);
     const pag = await payment.get({ id: data.id });
 
@@ -273,7 +313,6 @@ app.post('/api/webhook/mp', async (req, res) => {
     const email = pag.payer?.email;
     if (!email) return;
 
-    // Atualiza usuário como ativo no Supabase
     const { data: user } = await supabase
       .from('users')
       .select('id, whatsapp, nome')
@@ -285,9 +324,7 @@ app.post('/api/webhook/mp', async (req, res) => {
       return;
     }
 
-    // Calcula validade conforme valor pago
     const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
-
     const validade = new Date();
     validade.setDate(validade.getDate() + diasPlano);
 
@@ -303,7 +340,6 @@ app.post('/api/webhook/mp', async (req, res) => {
 
     console.log(`   ✅ Usuário ${email} ativado por ${diasPlano} dias`);
 
-    // Envia WhatsApp de confirmação
     if (user.whatsapp) {
       await enviarWhatsApp(
         user.whatsapp,
@@ -320,9 +356,7 @@ app.post('/api/webhook/mp', async (req, res) => {
   }
 });
 
-
-// ── Chatbot WhatsApp (Z-API + Gemini) ──────────────────────
-// GET para validação do Z-API
+// ── Webhook WhatsApp (Evolution API) ────────────────────────
 app.get('/api/whatsapp/webhook', (req, res) => {
   res.json({ ok: true, status: 'SaiuVaga Chatbot ativo ✅' });
 });
@@ -332,11 +366,23 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
 
   try {
     const body = req.body;
-    const phone = body.phone || body.from;
-    const text  = (body.text?.message || body.body || '').trim();
+
+    // Formato Evolution API v2
+    const phone = body?.data?.key?.remoteJid?.replace('@s.whatsapp.net', '')
+      || body?.phone
+      || body?.from;
+    const text = (
+      body?.data?.message?.conversation ||
+      body?.data?.message?.extendedTextMessage?.text ||
+      body?.text?.message ||
+      body?.body || ''
+    ).trim();
 
     if (!phone || !text) return;
-    if (body.isGroup || body.fromMe) return; // ignora grupos e mensagens próprias
+
+    // Ignora grupos e mensagens próprias
+    if (body?.data?.key?.fromMe) return;
+    if (phone.includes('@g.us')) return;
 
     console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
 
@@ -353,7 +399,6 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
     const ativo = user?.ativo && validade && validade > agora;
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
-    // Contexto do usuário para a IA
     let contextoUsuario = 'Usuário não cadastrado no SaiuVaga.';
     if (user) {
       if (ativo && user.plano === 'trial') {
@@ -367,7 +412,6 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
       }
     }
 
-    // Resposta via Google Gemini
     const prompt = `Você é o assistente virtual do SaiuVaga, um serviço de alertas de imóveis em tempo real via WhatsApp em São Paulo.
 
 INFORMAÇÕES DO PRODUTO:
@@ -413,17 +457,11 @@ Responda como assistente do SaiuVaga:`;
     const mensagem = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!mensagem) {
-      console.log('   ⚠️ Claude não respondeu');
+      console.log('   ⚠️ Gemini não respondeu');
       return;
     }
 
-    // Envia resposta via Z-API
-    await axios.post(
-      `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}/send-text`,
-      { phone, message: mensagem },
-      { timeout: 10000 }
-    );
-
+    await enviarWhatsApp(phone, null, mensagem);
     console.log(`   🤖 Resposta enviada para ${phone}`);
 
   } catch (err) {
@@ -431,8 +469,61 @@ Responda como assistente do SaiuVaga:`;
   }
 });
 
+// ── Rota para criar instância Evolution API ──────────────────
+app.post('/api/evolution/criar-instancia', async (req, res) => {
+  try {
+    const result = await axios.post(
+      `${EVOLUTION_URL}/instance/create`,
+      {
+        instanceName: EVOLUTION_INSTANCE,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      },
+      {
+        headers: {
+          'apikey': EVOLUTION_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Rota para obter QR Code ──────────────────────────────────
+app.get('/api/evolution/qrcode', async (req, res) => {
+  try {
+    const result = await axios.get(
+      `${EVOLUTION_URL}/instance/connect/${EVOLUTION_INSTANCE}`,
+      {
+        headers: { 'apikey': EVOLUTION_KEY },
+      }
+    );
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Rota para status da instância ───────────────────────────
+app.get('/api/evolution/status', async (req, res) => {
+  try {
+    const result = await axios.get(
+      `${EVOLUTION_URL}/instance/fetchInstances`,
+      {
+        headers: { 'apikey': EVOLUTION_KEY },
+      }
+    );
+    res.json(result.data);
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────
-// SCRAPER (sem alterações)
+// SCRAPER
 // ─────────────────────────────────────────────────────────────
 
 const BUSCAS = [
@@ -508,36 +599,6 @@ async function salvarImoveis(imoveis) {
   return novos;
 }
 
-// Função WhatsApp unificada (alerta de imóvel ou mensagem livre)
-async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
-  if (!process.env.ZAPI_INSTANCE || !process.env.ZAPI_TOKEN) {
-    console.log('   ⚠️  Z-API não configurado');
-    return false;
-  }
-
-  const mensagem = mensagemLivre || (
-    `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
-    `🏠 ${imovel.titulo}\n` +
-    `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mês\n` +
-    `📍 ${imovel.bairro}, SP\n` +
-    `🔗 ${imovel.link}\n\n` +
-    `_Responda PARAR para cancelar alertas_`
-  );
-
-  try {
-    await axios.post(
-      `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE}/token/${process.env.ZAPI_TOKEN}/send-text`,
-      { phone: telefone, message: mensagem },
-      { timeout: 10000 }
-    );
-    console.log(`   📲 WhatsApp enviado para ${telefone}`);
-    return true;
-  } catch (err) {
-    console.error(`   ✗ Erro Z-API: ${err.message}`);
-    return false;
-  }
-}
-
 async function verificarAlertas() {
   const { data: filtros } = await supabase
     .from('filtros')
@@ -548,7 +609,6 @@ async function verificarAlertas() {
 
   for (const filtro of filtros) {
     const whatsapp = filtro.users?.whatsapp;
-    // Só envia alerta se usuário está ativo (pagou)
     if (!whatsapp || !filtro.users?.ativo) continue;
 
     const { data: matches } = await supabase
