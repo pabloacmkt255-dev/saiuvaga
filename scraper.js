@@ -321,7 +321,12 @@ app.post('/api/webhook/mp', async (req, res) => {
 });
 
 
-// ── Chatbot WhatsApp (Z-API + Claude) ──────────────────────
+// ── Chatbot WhatsApp (Z-API + Gemini) ──────────────────────
+// GET para validação do Z-API
+app.get('/api/whatsapp/webhook', (req, res) => {
+  res.json({ ok: true, status: 'SaiuVaga Chatbot ativo ✅' });
+});
+
 app.post('/api/whatsapp/webhook', async (req, res) => {
   res.sendStatus(200);
 
