@@ -678,5 +678,18 @@ async function rodarScraper() {
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
+// ── Manter Evolution API acordada ───────────────────────────
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    await axios.get(`${EVOLUTION_URL}/instance/fetchInstances`, {
+      headers: { 'apikey': EVOLUTION_KEY },
+      timeout: 5000,
+    });
+    console.log('   💓 Evolution API ping OK');
+  } catch (err) {
+    console.log('   💤 Evolution API ping falhou:', err.message);
+  }
+});
+
 cron.schedule('*/5 * * * *', rodarScraper);
 rodarScraper();
