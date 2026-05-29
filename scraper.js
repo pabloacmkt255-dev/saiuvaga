@@ -548,60 +548,43 @@ const BUSCAS = [
   { bairro: 'Faria Lima',    region: 'faria-lima'    },
 ];
 
-async function buscarApify(bairro, region) {
+async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando: ${bairro}`);
 
-  if (!process.env.APIFY_TOKEN) {
-    console.log('   ⚠️  APIFY_TOKEN não configurado');
-    return [];
-  }
-
   try {
-    const run = await axios.post(
-      `https://api.apify.com/v2/acts/viralanalyzer~brazil-real-estate-scraper/runs`,
-      {
-        transactionType: 'rent',
-        state: 'sp',
-        city: 'sao-paulo',
-        region: region,
-        maxListings: 20,
-        includeDescription: false,
+    const query = encodeURIComponent(`${bairro} aluguel`);
+    const url = `https://www.olx.com.br/api/ad-search/v2/ads?q=${query}&category=1020&state=SP&sf=1&o=1&ps=20`;
+
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Referer': 'https://www.olx.com.br/',
+        'Origin': 'https://www.olx.com.br',
       },
-      {
-        headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` },
-        params: { waitForFinish: 120 },
-        timeout: 130000,
-      }
-    );
+      timeout: 15000,
+    });
 
-    const datasetId = run.data?.data?.defaultDatasetId;
-    if (!datasetId) {
-      console.log('   ⚠️  datasetId não retornado');
-      return [];
-    }
+    const listings = data?.data?.ads || data?.ads || [];
 
-    const results = await axios.get(
-      `https://api.apify.com/v2/datasets/${datasetId}/items`,
-      { headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` } }
-    );
-
-    const imoveis = (results.data || [])
-      .filter(item => item.price && item.title && item.url)
+    const imoveis = listings
+      .filter(item => item.price && item.subject && item.url)
       .map(item => ({
-        titulo: item.title,
-        preco: parseInt(String(item.price).replace(/\D/g, '')) || 0,
+        titulo: item.subject,
+        preco: parseInt(String(item.price?.value || item.price).replace(/\D/g, '')) || 0,
         bairro,
         tipo: 'residencial',
-        portal: item.source || 'OLX',
-        link: item.url.split('?')[0],
+        portal: 'OLX',
+        link: (item.url || '').split('?')[0],
       }))
-      .filter(i => i.preco > 0);
+      .filter(i => i.preco > 0 && i.link);
 
     console.log(`   ✓ ${imoveis.length} imóveis encontrados`);
     return imoveis;
 
   } catch (err) {
-    console.error(`   ✗ Erro Apify: ${err.message}`);
+    console.error(`   ✗ Erro OLX scraper: ${err.message}`);
     return [];
   }
 }
@@ -669,7 +652,7 @@ async function rodarScraper() {
   let total = 0;
 
   for (const b of BUSCAS) {
-    const imoveis = await buscarApify(b.bairro, b.region);
+    const imoveis = await buscarOLX(b.bairro, b.region);
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
   }
