@@ -1,6 +1,7 @@
-// scraper.js — SaiuVaga (Apify + Supabase + Evolution API + Mercado Pago)
+// scraper.js — SaiuVaga (Supabase + Evolution API + Mercado Pago)
 require('dotenv').config();
 const axios = require('axios');
+const cheerio = require('cheerio');
 const cron = require('node-cron');
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
@@ -539,7 +540,7 @@ app.get('/api/evolution/status', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// SCRAPER — Apify Brazil Real Estate Scraper (OLX, ZAP, VivaReal)
+// SCRAPER — Direto na OLX (sem Apify, sem custo)
 // ─────────────────────────────────────────────────────────────
 
 const BUSCAS = [
@@ -548,67 +549,123 @@ const BUSCAS = [
   { bairro: 'Faria Lima',    region: 'faria-lima'    },
 ];
 
-async function buscarOLX(bairro, region) {
-  console.log(`\n🔍 Buscando: ${bairro}`);
+// Headers que imitam um navegador real
+const HEADERS_BROWSER = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'pt-BR,pt;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection': 'keep-alive',
+  'Cache-Control': 'no-cache',
+  'Upgrade-Insecure-Requests': '1',
+};
 
-  if (!process.env.APIFY_TOKEN) {
-    console.log('   ⚠️  APIFY_TOKEN não configurado');
-    return [];
+// Estratégia 1: API interna OLX (mais confiável, retorna JSON limpo)
+async function buscarOLXApi(bairro) {
+  const params = new URLSearchParams({
+    q: bairro,
+    sc: '1020',   // categoria imóveis
+    sf: '1',
+    re: '11',     // região SP
+    o: '1',
+  });
+
+  const { data } = await axios.get(
+    `https://www.olx.com.br/api/pwa/v2/listings?${params}`,
+    {
+      headers: {
+        ...HEADERS_BROWSER,
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://www.olx.com.br/',
+      },
+      timeout: 30000,
+    }
+  );
+
+  const listings = data?.data?.listing?.items || data?.listing?.items || data?.ads || [];
+
+  return listings
+    .filter(item => item.price && item.subject)
+    .map(item => ({
+      titulo: item.subject || item.title || '',
+      preco: parseInt(String(item.price || '0').replace(/\D/g, '')) || 0,
+      bairro,
+      tipo: 'residencial',
+      portal: 'OLX',
+      link: (item.url || '').split('?')[0],
+    }))
+    .filter(i => i.preco > 0 && i.link);
+}
+
+// Estratégia 2: HTML scraping via __NEXT_DATA__ embutido
+async function buscarOLXHtml(bairro) {
+  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`;
+  const { data: html } = await axios.get(url, {
+    headers: HEADERS_BROWSER,
+    timeout: 30000,
+    maxRedirects: 5,
+  });
+
+  const $ = cheerio.load(html);
+  const imoveis = [];
+
+  // OLX injeta todos os anúncios em <script id="__NEXT_DATA__">
+  const nextDataEl = $('script#__NEXT_DATA__').html();
+  if (nextDataEl) {
+    try {
+      const json = JSON.parse(nextDataEl);
+      const ads = json?.props?.pageProps?.ads || json?.props?.pageProps?.pageProps?.ads || [];
+      for (const ad of ads) {
+        const titulo = ad.subject || ad.title || '';
+        const preco = parseInt(String(ad.price?.value || ad.price || '0').replace(/\D/g, '')) || 0;
+        const link = (ad.url || '').split('?')[0];
+        if (titulo && preco > 0 && link) {
+          imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Fallback: seletores CSS diretos
+  if (imoveis.length === 0) {
+    $('section[data-lurker-detail], li[data-lurker-detail], div[data-lurker-detail]').each((_, el) => {
+      const titulo = $(el).find('h2, h3').first().text().trim();
+      const precoText = $(el).find('[class*="price" i]').first().text().trim();
+      const preco = parseInt(precoText.replace(/\D/g, '')) || 0;
+      const href = $(el).find('a').first().attr('href') || '';
+      const link = href.startsWith('http') ? href.split('?')[0] : '';
+      if (titulo && preco > 0 && link) {
+        imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+      }
+    });
+  }
+
+  return imoveis;
+}
+
+// Função principal: tenta API, fallback HTML
+async function buscarOLX(bairro, region) {
+  console.log(`\n🔍 Buscando OLX: ${bairro}`);
+
+  try {
+    const imoveis = await buscarOLXApi(bairro);
+    if (imoveis.length > 0) {
+      const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+      console.log(`   ✓ ${unicos.length} imóveis via API`);
+      return unicos;
+    }
+  } catch (err) {
+    console.log(`   ⚠️ API OLX falhou (${err.message}), tentando HTML...`);
   }
 
   try {
-    const run = await axios.post(
-      `https://api.apify.com/v2/acts/leadercorp~olx-imoveis-scraper/runs`,
-      {
-        urlsIniciais: [{
-          url: `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`
-        }],
-        coletarDetalhesAnuncio: false,
-        incluirDescricao: false,
-        incluirFotos: false,
-        incluirDadosAnunciante: false,
-        pararCedoSemNovosItens: true,
-        correspondenciaEstrita: false,
-        depurar: false,
-        fallbackPlaywright: false,
-        usarProxiesResidenciais: false,
-        configuracaoProxy: { useApifyProxy: true },
-      },
-      {
-        headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` },
-        params: { waitForFinish: 120 },
-        timeout: 130000,
-      }
-    );
-
-    const datasetId = run.data?.data?.defaultDatasetId;
-    if (!datasetId) {
-      console.log('   ⚠️  datasetId não retornado');
-      return [];
-    }
-
-    const results = await axios.get(
-      `https://api.apify.com/v2/datasets/${datasetId}/items`,
-      { headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` } }
-    );
-
-    const imoveis = (results.data || [])
-      .filter(item => (item.precoValor || item.preco) && item.titulo)
-      .map(item => ({
-        titulo: item.titulo,
-        preco: parseInt(String(item.precoValor || item.preco || '0').replace(/\D/g, '')) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'OLX',
-        link: (item.url || item.linkAnuncio || '').split('?')[0],
-      }))
-      .filter(i => i.preco > 0);
-
-    console.log(`   ✓ ${imoveis.length} imóveis encontrados`);
-    return imoveis;
-
+    const imoveis = await buscarOLXHtml(bairro);
+    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+    console.log(`   ✓ ${unicos.length} imóveis via HTML`);
+    return unicos;
   } catch (err) {
-    console.error(`   ✗ Erro Apify: ${err.message}`);
+    console.error(`   ✗ Erro scraper OLX: ${err.message}`);
     return [];
   }
 }
