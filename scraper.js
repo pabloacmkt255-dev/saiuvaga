@@ -593,16 +593,16 @@ async function buscarOLX(bairro, region) {
     );
 
     const imoveis = (results.data || [])
-      .filter(item => item.preco && item.titulo && item.url)
+      .filter(item => (item.precoValor || item.preco) && item.titulo)
       .map(item => ({
         titulo: item.titulo,
-        preco: parseInt(String(item.preco).replace(/\D/g, '')) || 0,
+        preco: parseInt(String(item.precoValor || item.preco || '0').replace(/\D/g, '')) || 0,
         bairro,
         tipo: 'residencial',
         portal: 'OLX',
-        link: (item.url || '').split('?')[0],
+        link: (item.url || item.linkAnuncio || '').split('?')[0],
       }))
-      .filter(i => i.preco > 0 && i.link);
+      .filter(i => i.preco > 0);
 
     console.log(`   ✓ ${imoveis.length} imóveis encontrados`);
     return imoveis;
