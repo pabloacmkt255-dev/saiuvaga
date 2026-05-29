@@ -551,45 +551,64 @@ const BUSCAS = [
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando: ${bairro}`);
 
+  if (!process.env.APIFY_TOKEN) {
+    console.log('   ⚠️  APIFY_TOKEN não configurado');
+    return [];
+  }
+
   try {
-    const query = encodeURIComponent(bairro);
-    const url = `https://glue-api.vivareal.com.br/v2/listings?user=user&portal=VIVAREAL&business=RENTAL&categoryPage=RESULT&listingType=USED&size=20&q=${query}&state=SP&city=S%C3%A3o+Paulo`;
-
-    const { data } = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Origin': 'https://www.vivareal.com.br',
-        'Referer': 'https://www.vivareal.com.br/',
-        'x-domain': 'www.vivareal.com.br',
+    const run = await axios.post(
+      `https://api.apify.com/v2/acts/leadercorp~olx-imoveis-scraper/runs`,
+      {
+        urlsIniciais: [{
+          url: `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`
+        }],
+        coletarDetalhesAnuncio: false,
+        incluirDescricao: false,
+        incluirFotos: false,
+        incluirDadosAnunciante: false,
+        pararCedoSemNovosItens: true,
+        correspondenciaEstrita: false,
+        depurar: false,
+        fallbackPlaywright: false,
+        usarProxiesResidenciais: false,
+        configuracaoProxy: { useApifyProxy: true },
       },
-      timeout: 15000,
-    });
+      {
+        headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` },
+        params: { waitForFinish: 120 },
+        timeout: 130000,
+      }
+    );
 
-    const listings = data?.search?.result?.listings || [];
+    const datasetId = run.data?.data?.defaultDatasetId;
+    if (!datasetId) {
+      console.log('   ⚠️  datasetId não retornado');
+      return [];
+    }
 
-    const imoveis = listings
-      .map(item => {
-        const listing = item?.listing;
-        const pricingInfo = listing?.pricingInfos?.find(p => p.businessType === 'RENTAL') || listing?.pricingInfos?.[0];
-        const preco = parseInt(String(pricingInfo?.price || '0').replace(/\D/g, '')) || 0;
-        return {
-          titulo: listing?.title || listing?.description?.substring(0, 80) || 'Imóvel',
-          preco,
-          bairro,
-          tipo: 'residencial',
-          portal: 'VivaReal',
-          link: `https://www.vivareal.com.br${listing?.href || ''}`.split('?')[0],
-        };
-      })
-      .filter(i => i.preco > 0 && i.link !== 'https://www.vivareal.com.br');
+    const results = await axios.get(
+      `https://api.apify.com/v2/datasets/${datasetId}/items`,
+      { headers: { Authorization: `Bearer ${process.env.APIFY_TOKEN}` } }
+    );
+
+    const imoveis = (results.data || [])
+      .filter(item => item.preco && item.titulo && item.url)
+      .map(item => ({
+        titulo: item.titulo,
+        preco: parseInt(String(item.preco).replace(/\D/g, '')) || 0,
+        bairro,
+        tipo: 'residencial',
+        portal: 'OLX',
+        link: (item.url || '').split('?')[0],
+      }))
+      .filter(i => i.preco > 0 && i.link);
 
     console.log(`   ✓ ${imoveis.length} imóveis encontrados`);
     return imoveis;
 
   } catch (err) {
-    console.error(`   ✗ Erro VivaReal scraper: ${err.response?.status || err.message}`);
+    console.error(`   ✗ Erro Apify: ${err.message}`);
     return [];
   }
 }
