@@ -552,39 +552,44 @@ async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando: ${bairro}`);
 
   try {
-    const query = encodeURIComponent(`${bairro} aluguel`);
-    const url = `https://www.olx.com.br/api/ad-search/v2/ads?q=${query}&category=1020&state=SP&sf=1&o=1&ps=20`;
+    const query = encodeURIComponent(bairro);
+    const url = `https://glue-api.zapimoveis.com.br/v2/listings?user=user&portal=ZAP&business=RENTAL&categoryPage=RESULT&listingType=USED&size=20&q=${query}&state=SP&city=S%C3%A3o+Paulo`;
 
     const { data } = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
+        'Accept': 'application/json',
         'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Referer': 'https://www.olx.com.br/',
-        'Origin': 'https://www.olx.com.br',
+        'Origin': 'https://www.zapimoveis.com.br',
+        'Referer': 'https://www.zapimoveis.com.br/',
+        'x-domain': 'www.zapimoveis.com.br',
       },
       timeout: 15000,
     });
 
-    const listings = data?.data?.ads || data?.ads || [];
+    const listings = data?.search?.result?.listings || [];
 
     const imoveis = listings
-      .filter(item => item.price && item.subject && item.url)
-      .map(item => ({
-        titulo: item.subject,
-        preco: parseInt(String(item.price?.value || item.price).replace(/\D/g, '')) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'OLX',
-        link: (item.url || '').split('?')[0],
-      }))
-      .filter(i => i.preco > 0 && i.link);
+      .map(item => {
+        const listing = item?.listing;
+        const pricingInfo = listing?.pricingInfos?.find(p => p.businessType === 'RENTAL') || listing?.pricingInfos?.[0];
+        const preco = parseInt(String(pricingInfo?.price || '0').replace(/\D/g, '')) || 0;
+        return {
+          titulo: listing?.title || listing?.description?.substring(0, 80) || 'Imóvel',
+          preco,
+          bairro,
+          tipo: 'residencial',
+          portal: 'ZAP',
+          link: `https://www.zapimoveis.com.br${listing?.href || ''}`.split('?')[0],
+        };
+      })
+      .filter(i => i.preco > 0 && i.link !== 'https://www.zapimoveis.com.br');
 
     console.log(`   ✓ ${imoveis.length} imóveis encontrados`);
     return imoveis;
 
   } catch (err) {
-    console.error(`   ✗ Erro OLX scraper: ${err.message}`);
+    console.error(`   ✗ Erro ZAP scraper: ${err.response?.status || err.message}`);
     return [];
   }
 }
