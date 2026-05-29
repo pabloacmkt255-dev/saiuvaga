@@ -43,7 +43,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .testi-name { font-size: 11px; color: var(--ink3); font-weight: 500; }
 .testi-time { font-size: 11px; color: var(--g); font-weight: 600; white-space: nowrap; }
 .right { background: var(--wh); border-left: 1px solid var(--ln); padding: 48px 44px; display: flex; flex-direction: column; justify-content: center; min-height: 100vh; }
-.form-head { margin-bottom: 32px; }
+.form-head { margin-bottom: 28px; }
 .form-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 24px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
 .form-sub { font-size: 14px; color: var(--ink3); }
 .tabs { display: flex; background: var(--bg); border-radius: var(--r); padding: 3px; margin-bottom: 28px; }
@@ -57,21 +57,30 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--ink3); margin-bottom: 6px; }
 .field input, .field select { width: 100%; height: 48px; border: 1.5px solid var(--ln); border-radius: var(--r); padding: 0 14px; font-size: 14px; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); outline: none; transition: all .2s; appearance: none; }
 .field input:focus, .field select:focus { border-color: var(--g); background: var(--wh); box-shadow: 0 0 0 3px rgba(29,158,117,.1); }
-.plan-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-.plan-card { border: 1.5px solid var(--ln); border-radius: var(--r); padding: 14px; cursor: pointer; transition: all .2s; position: relative; }
+
+/* PLANOS — 3 cards em grid */
+.plan-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+.plan-card { border: 1.5px solid var(--ln); border-radius: var(--r); padding: 12px 10px; cursor: pointer; transition: all .2s; position: relative; text-align: center; }
 .plan-card:hover { border-color: var(--g); }
 .plan-card.on { border-color: var(--g); background: var(--glt); }
-.plan-card-name { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
-.plan-card-price { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 800; color: var(--g); }
-.plan-card-price sub { font-size: 11px; font-weight: 400; color: var(--ink3); font-family: 'Inter', sans-serif; }
-.plan-card-desc { font-size: 11px; color: var(--ink3); margin-top: 4px; line-height: 1.4; }
-.plan-badge { position: absolute; top: -8px; right: 10px; background: var(--g); color: #fff; font-size: 9px; font-weight: 700; border-radius: 99px; padding: 2px 8px; letter-spacing: .3px; }
+.plan-card-name { font-size: 11px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.plan-card-price { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: var(--g); line-height: 1; }
+.plan-card-price sub { font-size: 10px; font-weight: 400; color: var(--ink3); font-family: 'Inter', sans-serif; }
+.plan-card-desc { font-size: 10px; color: var(--ink3); margin-top: 4px; line-height: 1.3; }
+.plan-badge { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); background: var(--g); color: #fff; font-size: 8px; font-weight: 700; border-radius: 99px; padding: 2px 7px; letter-spacing: .3px; white-space: nowrap; }
+
+/* Trial destaque */
+.plan-card.trial-card { border-color: var(--g); background: linear-gradient(135deg, #f0fdf9 0%, var(--glt) 100%); }
+.plan-card.trial-card .plan-card-price { color: var(--gdk); }
+.plan-card.trial-card.on { background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); }
+
 .submit-btn { width: 100%; height: 50px; background: var(--g); color: #fff; border: none; border-radius: var(--r); font-size: 15px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; }
 .submit-btn:hover { background: var(--gdk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(29,158,117,.3); }
 .submit-btn:active { transform: translateY(0); }
 .submit-btn:disabled { opacity: .7; cursor: not-allowed; transform: none; }
 .hint { font-size: 12px; color: var(--ink3); text-align: center; margin-top: 14px; }
 .hint a { color: var(--g); text-decoration: none; font-weight: 500; cursor: pointer; }
+.hint a:hover { text-decoration: underline; }
 .success-view { display: none; text-align: center; padding: 20px 0; }
 .success-ico { width: 64px; height: 64px; border-radius: 50%; background: var(--glt); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 26px; animation: popIn .4s cubic-bezier(.34,1.56,.64,1); }
 @keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -93,12 +102,13 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 @media (max-width: 768px) {
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
-  .right { border-left: none; padding: 32px 24px; min-height: 100vh; }
+  .right { border-left: none; padding: 32px 20px; min-height: 100vh; }
   .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 28px; }
+  .plan-cards { grid-template-columns: 1fr; gap: 10px; }
+  .plan-card { text-align: left; padding: 14px; }
+  .plan-card-price { font-size: 22px; }
 }
 .mobile-logo { display: none; }
-
-/* Botão WhatsApp Flutuante */
 .wpp-float{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 .wpp-tooltip{background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13.5px;font-weight:500;padding:9px 14px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.13);white-space:nowrap;opacity:0;transform:translateX(10px);transition:opacity .25s ease,transform .25s ease;pointer-events:none}
 .wpp-float:hover .wpp-tooltip,.wpp-float.show-tip .wpp-tooltip{opacity:1;transform:translateX(0)}
@@ -108,34 +118,15 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .wpp-btn::before{content:'';position:absolute;inset:0;border-radius:50%;background:#25D366;animation:wpp-pulse 2.5s ease-out infinite;z-index:-1}
 @keyframes wpp-pulse{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(1.55);opacity:0}}
 </style>
-
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-W12FH3ZNDP');
-    gtag('config', 'AW-18192818213');
-  </script>
-  <script>
-  !function(f,b,e,v,n,t,s)
-  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-  n.queue=[];t=b.createElement(e);t.async=!0;
-  t.src=v;s=b.getElementsByTagName(e)[0];
-  s.parentNode.insertBefore(t,s)}(window,document,'script',
-  'https://connect.facebook.net/en_US/fbevents.js');
-  fbq('init', '26792201447075176');
-  fbq('track', 'PageView');
-  </script>
-  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=26792201447075176&ev=PageView&noscript=1"/></noscript>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-W12FH3ZNDP');gtag('config','AW-18192818213');</script>
+  <script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','26792201447075176');fbq('track','PageView');</script>
 </head>
 <body>
 <div class="bg-pattern"></div>
 <div class="container">
   <div class="left">
-    <a href="index.html" class="logo">
+    <a href="/" class="logo">
       <div class="logo-mark">
         <svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
@@ -174,7 +165,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
     <div id="main-form">
       <div class="form-head">
         <div class="form-title" id="form-title">Criar sua conta</div>
-        <div class="form-sub" id="form-sub">7 dias grátis para testar. Sem cartão de crédito.</div>
+        <div class="form-sub" id="form-sub">Comece grátis por 7 dias. Sem cartão de crédito.</div>
       </div>
       <div class="tabs">
         <div class="tab on" onclick="setTab('cadastrar',this)">Cadastrar</div>
@@ -185,15 +176,23 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
         <span id="google-btn-text">Continuar com Google</span>
       </button>
-      <div class="divider">ou</div>
+      <div class="divider">ou cadastre com e-mail</div>
 
       <div id="view-cadastrar">
-        <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo"></div>
-        <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com"></div>
-        <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)"></div>
-        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres"></div>
+        <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo" autocomplete="name"></div>
+        <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
+        <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
+        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password"></div>
+
+        <!-- PLANOS: Trial + Mensal + Trimestral -->
         <div class="plan-cards">
-          <div class="plan-card on" onclick="selectPlan(this,'mensal')">
+          <div class="plan-card trial-card on" onclick="selectPlan(this,'trial')">
+            <div class="plan-badge" style="background:var(--gdk)">&#127873; Grátis</div>
+            <div class="plan-card-name">Trial</div>
+            <div class="plan-card-price">R$0<sub>/7 dias</sub></div>
+            <div class="plan-card-desc">Sem cartão · Cancela quando quiser</div>
+          </div>
+          <div class="plan-card" onclick="selectPlan(this,'mensal')">
             <div class="plan-badge">Popular</div>
             <div class="plan-card-name">Mensal</div>
             <div class="plan-card-price">R$19<sub>/mês</sub></div>
@@ -203,14 +202,15 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
             <div class="plan-badge" style="background:#f59e0b">1 mês grátis</div>
             <div class="plan-card-name">Trimestral</div>
             <div class="plan-card-price">R$38<sub>/3 meses</sub></div>
-            <div class="plan-card-desc">Equivale a R$12,67/mês</div>
+            <div class="plan-card-desc">R$12,67/mês</div>
           </div>
         </div>
+
         <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Criar conta grátis &rarr;</span>
         </button>
-        <p class="hint">Ao criar, você aceita os <a href="#" onclick="return false">Termos de uso</a>.</p>
+        <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
       </div>
 
       <div id="view-entrar" style="display:none">
@@ -229,16 +229,13 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
       <div class="success-title" id="suc-title">Conta criada!</div>
       <div class="success-sub" id="suc-sub">Você vai receber alertas no WhatsApp assim que surgir uma vaga com seus critérios.</div>
       <div class="wapp-preview">
-        <div class="wapp-bar">
-          <div class="wapp-av">&#127968;</div>
-          <div class="wapp-info"><div class="wapp-name">SaiuVaga</div><div class="wapp-status">em linha</div></div>
-        </div>
+        <div class="wapp-bar"><div class="wapp-av">&#127968;</div><div class="wapp-info"><div class="wapp-name">SaiuVaga</div><div class="wapp-status">em linha</div></div></div>
         <div class="wapp-body">
           <div class="bubble">
             <strong>&#128680; Nova vaga &mdash; Pinheiros!</strong><br>
             Ap. 2 quartos &middot; 55m&sup2;<br>
-            &#128176; R$ 1.650/mês<br>
-            &#128279; <a href="#" onclick="return false" style="color:#1D9E75">ver imóvel &rarr;</a>
+            &#128176; R$ 1.650/m&ecirc;s<br>
+            &#128279; <a href="#" onclick="return false" style="color:#1D9E75">ver im&oacute;vel &rarr;</a>
             <div class="bubble-time">agora &#10003;&#10003;</div>
           </div>
         </div>
@@ -248,7 +245,6 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   </div>
 </div>
 
-<!-- Botão WhatsApp Flutuante -->
 <div class="wpp-float" id="wppFloat">
   <div class="wpp-tooltip">Fale com a gente no WhatsApp &#128172;</div>
   <a class="wpp-btn" href="https://wa.me/5511984207437?text=Ol%C3%A1%2C%20tenho%20uma%20d%C3%BAvida%20sobre%20o%20SaiuVaga" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
@@ -274,7 +270,7 @@ sb.auth.getSession().then(async ({ data }) => {
     } else if (status.trial_usado) {
       window.location.href = 'saiuvaga-pagamento.html';
     }
-  } catch(e) { console.log('Status check failed:', e); }
+  } catch(e) {}
 });
 
 sb.auth.onAuthStateChange(async (event, session) => {
@@ -283,7 +279,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     const { data: existe } = await sb.from('users').select('id, trial_usado, ativo').eq('id', user.id).maybeSingle();
     if (!existe) {
       await sb.from('users').insert({ id: user.id, email: user.email, nome: user.user_metadata?.full_name || '', whatsapp: '', plano: planoSelecionado, ativo: false });
-      try { await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: user.id, email: user.email }) }); } catch(e) {}
+      try { await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: user.id, email: user.email }) }); } catch(e) {}
       showSuccess('Trial ativado! 🎉', 'Seus 7 dias grátis começaram. Você receberá alertas no WhatsApp assim que surgir uma vaga!');
     } else if (existe.trial_usado && !existe.ativo) {
       window.location.href = 'saiuvaga-pagamento.html';
@@ -293,7 +289,11 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
-let planoSelecionado = 'mensal';
+let planoSelecionado = 'trial';
+
+// Preenche WhatsApp se veio da landing
+const svWpp = sessionStorage.getItem('sv_wpp');
+if (svWpp) { setTimeout(() => { const el = document.getElementById('reg-wpp'); if (el) el.value = svWpp; }, 100); }
 
 function setTab(id, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
@@ -301,7 +301,7 @@ function setTab(id, el) {
   document.getElementById('view-cadastrar').style.display = id === 'cadastrar' ? '' : 'none';
   document.getElementById('view-entrar').style.display = id === 'entrar' ? '' : 'none';
   document.getElementById('form-title').textContent = id === 'cadastrar' ? 'Criar sua conta' : 'Bem-vindo de volta';
-  document.getElementById('form-sub').textContent = id === 'cadastrar' ? '7 dias grátis. Sem cartão de crédito.' : 'Acesse seus alertas de imóveis.';
+  document.getElementById('form-sub').textContent = id === 'cadastrar' ? 'Comece grátis por 7 dias. Sem cartão de crédito.' : 'Acesse seus alertas de imóveis.';
   document.getElementById('google-btn-text').textContent = id === 'cadastrar' ? 'Cadastrar com Google' : 'Continuar com Google';
   hideError();
 }
@@ -310,12 +310,17 @@ function selectPlan(el, plano) {
   document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('on'));
   el.classList.add('on');
   planoSelecionado = plano;
+  // Atualiza texto do botão
+  const btnText = document.getElementById('btn1-text');
+  if (plano === 'trial') btnText.textContent = 'Começar grátis por 7 dias →';
+  else if (plano === 'mensal') btnText.textContent = 'Criar conta · R$19/mês →';
+  else btnText.textContent = 'Criar conta · R$38/3 meses →';
 }
 
 function mascaraFone(el) {
-  let v = el.value.replace(/\D/g, '').slice(0, 11);
-  if (v.length > 6) v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
-  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+  let v = el.value.replace(/\D/g,'').slice(0,11);
+  if (v.length > 6) v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/,'($1) $2-$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/,'($1) $2');
   el.value = v;
 }
 
@@ -323,14 +328,13 @@ function setLoading(btnId, spinId, loading) {
   const btn = document.getElementById(btnId);
   document.getElementById(spinId).style.display = loading ? 'block' : 'none';
   btn.disabled = loading;
-  const textEl = btn.querySelector('span');
-  if (textEl) textEl.style.opacity = loading ? '0' : '1';
+  const t = btn.querySelector('span');
+  if (t) t.style.opacity = loading ? '0' : '1';
 }
 
-function showError(msg, tipo = 'erro') {
+function showError(msg, tipo='erro') {
   const el = document.getElementById('error-msg');
-  el.textContent = msg;
-  el.style.display = 'block';
+  el.textContent = msg; el.style.display = 'block';
   el.className = 'error-msg' + (tipo === 'ok' ? ' success-msg' : '');
 }
 
@@ -338,8 +342,7 @@ function hideError() { document.getElementById('error-msg').style.display = 'non
 
 function showSuccess(title, sub) {
   document.getElementById('main-form').style.display = 'none';
-  const sv = document.getElementById('success-view');
-  sv.style.display = 'block';
+  document.getElementById('success-view').style.display = 'block';
   document.getElementById('suc-title').textContent = title;
   document.getElementById('suc-sub').textContent = sub;
 }
@@ -351,50 +354,50 @@ async function cadastrar() {
   const pass  = document.getElementById('reg-pass').value;
   if (!nome || !email || !wpp || !pass) { showError('Preencha todos os campos.'); return; }
   if (pass.length < 8) { showError('A senha precisa ter pelo menos 8 caracteres.'); return; }
-  setLoading('btn-cadastrar', 'spin1', true);
-  hideError();
+  setLoading('btn-cadastrar','spin1',true); hideError();
   const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
   if (error) {
-    setLoading('btn-cadastrar', 'spin1', false);
-    const msgs = { 'User already registered': 'Este e-mail já está cadastrado. Faça login.', 'Password should be at least 6 characters': 'Senha muito curta.', 'Unable to validate email address': 'E-mail inválido.' };
-    showError(msgs[error.message] || error.message);
-    return;
+    setLoading('btn-cadastrar','spin1',false);
+    const msgs = { 'User already registered':'Este e-mail já está cadastrado. Faça login.', 'Password should be at least 6 characters':'Senha muito curta.', 'Unable to validate email address':'E-mail inválido.' };
+    showError(msgs[error.message] || error.message); return;
   }
   if (data.user) {
-    await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g, ''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
+    await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
   }
-  setLoading('btn-cadastrar', 'spin1', false);
-  if (typeof gtag !== 'undefined') { gtag('event', 'conversion', {'send_to': 'AW-18192818213/lead'}); gtag('event', 'sign_up', {'method': 'email'}); }
-  if (typeof fbq !== 'undefined') fbq('track', 'Lead');
-  showSuccess('Confirme seu e-mail! 📧', `Enviamos um link de confirmação para ${email}. Clique no link para ativar seus 7 dias grátis.`);
+  setLoading('btn-cadastrar','spin1',false);
+  if (typeof gtag !== 'undefined') { gtag('event','conversion',{'send_to':'AW-18192818213/lead'}); gtag('event','sign_up',{'method':'email'}); }
+  if (typeof fbq !== 'undefined') fbq('track','Lead');
+  // Se escolheu plano pago, redireciona para pagamento após confirmar e-mail
+  const msg = planoSelecionado === 'trial'
+    ? `Enviamos um link para ${email}. Clique nele para ativar seus 7 dias grátis.`
+    : `Enviamos um link para ${email}. Após confirmar, você será redirecionado para o pagamento.`;
+  showSuccess('Confirme seu e-mail! 📧', msg);
 }
 
 async function entrar() {
   const email = document.getElementById('login-user').value.trim();
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { showError('Preencha e-mail e senha.'); return; }
-  setLoading('btn-entrar', 'spin2', true);
-  hideError();
+  setLoading('btn-entrar','spin2',true); hideError();
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) {
-    setLoading('btn-entrar', 'spin2', false);
-    const msgs = { 'Invalid login credentials': 'E-mail ou senha incorretos.', 'Email not confirmed': 'Confirme seu e-mail antes de entrar.' };
-    showError(msgs[error.message] || error.message);
-    return;
+    setLoading('btn-entrar','spin2',false);
+    const msgs = { 'Invalid login credentials':'E-mail ou senha incorretos.', 'Email not confirmed':'Confirme seu e-mail antes de entrar.' };
+    showError(msgs[error.message] || error.message); return;
   }
-  setLoading('btn-entrar', 'spin2', false);
+  setLoading('btn-entrar','spin2',false);
   const { data: user } = await sb.from('users').select('ativo, nome').eq('id', data.user.id).maybeSingle();
   if (user?.ativo) {
-    showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`, 'Seus alertas estão ativos. Redirecionando...');
+    showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`,'Seus alertas estão ativos. Redirecionando...');
     setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
   } else {
-    showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas de imóveis.');
+    showSuccess('Login feito! ✓','Ative seu plano para começar a receber alertas de imóveis.');
   }
 }
 
 async function loginGoogle() {
-  if (typeof gtag !== 'undefined') gtag('event', 'sign_up', {'method': 'google'});
-  if (typeof fbq !== 'undefined') fbq('track', 'Lead');
+  if (typeof gtag !== 'undefined') gtag('event','sign_up',{'method':'google'});
+  if (typeof fbq !== 'undefined') fbq('track','Lead');
   const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://saiuvaga.com.br/saiuvaga-pagamento.html' } });
   if (error) showError('Erro ao conectar com Google: ' + error.message);
 }
@@ -407,7 +410,6 @@ async function forgotPass() {
   showError('✓ E-mail de redefinição enviado para ' + email, 'ok');
 }
 
-// Tooltip automático
 (function(){var f=document.getElementById('wppFloat');if(!sessionStorage.getItem('wppShown')){setTimeout(function(){f.classList.add('show-tip');setTimeout(function(){f.classList.remove('show-tip');},4000);},3000);sessionStorage.setItem('wppShown','1');}})();
 </script>
 </body>
