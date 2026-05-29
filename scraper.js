@@ -366,29 +366,47 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
 
   try {
     const body = req.body;
+    console.log('\n📩 RAW WEBHOOK:', JSON.stringify(body).slice(0, 600));
 
-    // Formato Evolution API v2
-    const remoteJid = body?.data?.key?.remoteJid || body?.data?.remoteJid || '';
+    // Formato Evolution API v2 — suporta múltiplos formatos de payload
+    const remoteJid = (
+      body?.data?.key?.remoteJid ||
+      body?.data?.remoteJid ||
+      body?.key?.remoteJid ||
+      body?.remoteJid || ''
+    );
 
-    // Ignora grupos e mensagens próprias logo no início
-    if (body?.data?.key?.fromMe) return;
+    // Ignora grupos e mensagens próprias
+    const fromMe = body?.data?.key?.fromMe || body?.key?.fromMe || false;
+    if (fromMe) return;
     if (remoteJid.includes('@g.us')) return;
 
-    // Extrai phone — suporta @s.whatsapp.net e @lid
-    const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '')
+    // Extrai phone limpando sufixo WhatsApp
+    const phone = remoteJid
+      .replace('@s.whatsapp.net', '')
+      .replace('@lid', '')
+      .replace('@c.us', '')
+      || body?.data?.sender
+      || body?.sender
       || body?.phone
-      || body?.from;
+      || body?.from
+      || '';
 
+    // Extrai texto suportando todos os tipos de mensagem
     const text = (
       body?.data?.message?.conversation ||
       body?.data?.message?.extendedTextMessage?.text ||
       body?.data?.message?.imageMessage?.caption ||
+      body?.data?.message?.videoMessage?.caption ||
+      body?.data?.message?.buttonsResponseMessage?.selectedDisplayText ||
+      body?.data?.message?.listResponseMessage?.title ||
       body?.message?.conversation ||
+      body?.message?.extendedTextMessage?.text ||
       body?.text?.message ||
       body?.body || ''
     ).trim();
 
-    console.log(`\n📩 Webhook recebido — phone=${phone} text="${text}"`);
+    console.log(`   📱 phone=${phone} text="${text}"`);
 
     if (!phone || !text) {
       console.log(`   ⚠️ phone ou text vazio, ignorando`);
@@ -560,33 +578,66 @@ const HEADERS_BROWSER = {
   'Upgrade-Insecure-Requests': '1',
 };
 
-// Estratégia 1: API interna OLX (mais confiável, retorna JSON limpo)
-async function buscarOLXApi(bairro) {
-  const params = new URLSearchParams({
-    q: bairro,
-    sc: '1020',   // categoria imóveis
-    sf: '1',
-    re: '11',     // região SP
-    o: '1',
-  });
+// Estratégia 1: RSS público OLX (não tem bloqueio 403 em servidor)
+async function buscarOLXRss(bairro) {
+  // OLX disponibiliza RSS para cada busca — JSON limpo, sem Cloudflare
+  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}&o=1&f=p`;
 
-  const { data } = await axios.get(
-    `https://www.olx.com.br/api/pwa/v2/listings?${params}`,
+  const { data: xml } = await axios.get(
+    url.replace('www.olx.com.br', 'www.olx.com.br').replace('?', '.rss?'),
     {
       headers: {
-        ...HEADERS_BROWSER,
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': 'https://www.olx.com.br/',
+        'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+        'Accept': 'application/rss+xml, application/xml, text/xml',
       },
-      timeout: 30000,
+      timeout: 20000,
     }
   );
+
+  const $ = cheerio.load(xml, { xmlMode: true });
+  const imoveis = [];
+
+  $('item').each((_, el) => {
+    const titulo = $(el).find('title').first().text().trim();
+    const link = $(el).find('link').first().text().trim() || $(el).find('guid').text().trim();
+    const desc = $(el).find('description').text();
+    const precoMatch = desc.match(/R\$\s*([\d.,]+)/) || titulo.match(/R\$\s*([\d.,]+)/);
+    const preco = precoMatch ? parseInt(precoMatch[1].replace(/\D/g, '')) : 0;
+
+    if (titulo && link && preco > 0) {
+      imoveis.push({
+        titulo,
+        preco,
+        bairro,
+        tipo: 'residencial',
+        portal: 'OLX',
+        link: link.split('?')[0],
+      });
+    }
+  });
+
+  return imoveis;
+}
+
+// Estratégia 2: API JSON da OLX (endpoint mobile/pwa)
+async function buscarOLXApi(bairro) {
+  // Endpoint usado pelo app mobile OLX — menos protegido que o site
+  const url = `https://www.olx.com.br/api/pwa/v2/listings?q=${encodeURIComponent(bairro)}&sc=1020&re=11&o=1`;
+
+  const { data } = await axios.get(url, {
+    headers: {
+      'User-Agent': 'OLXBrasil/14.0.0 (Android 12)',
+      'Accept': 'application/json',
+      'x-app-version': '14.0.0',
+      'x-platform': 'android',
+    },
+    timeout: 20000,
+  });
 
   const listings = data?.data?.listing?.items || data?.listing?.items || data?.ads || [];
 
   return listings
-    .filter(item => item.price && item.subject)
+    .filter(item => item.price && (item.subject || item.title))
     .map(item => ({
       titulo: item.subject || item.title || '',
       preco: parseInt(String(item.price || '0').replace(/\D/g, '')) || 0,
@@ -598,24 +649,26 @@ async function buscarOLXApi(bairro) {
     .filter(i => i.preco > 0 && i.link);
 }
 
-// Estratégia 2: HTML scraping via __NEXT_DATA__ embutido
+// Estratégia 3: HTML com __NEXT_DATA__ (último recurso)
 async function buscarOLXHtml(bairro) {
   const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`;
   const { data: html } = await axios.get(url, {
-    headers: HEADERS_BROWSER,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+      'Accept': 'text/html',
+      'Accept-Language': 'pt-BR,pt;q=0.9',
+    },
     timeout: 30000,
-    maxRedirects: 5,
   });
 
   const $ = cheerio.load(html);
   const imoveis = [];
 
-  // OLX injeta todos os anúncios em <script id="__NEXT_DATA__">
   const nextDataEl = $('script#__NEXT_DATA__').html();
   if (nextDataEl) {
     try {
       const json = JSON.parse(nextDataEl);
-      const ads = json?.props?.pageProps?.ads || json?.props?.pageProps?.pageProps?.ads || [];
+      const ads = json?.props?.pageProps?.ads || [];
       for (const ad of ads) {
         const titulo = ad.subject || ad.title || '';
         const preco = parseInt(String(ad.price?.value || ad.price || '0').replace(/\D/g, '')) || 0;
@@ -627,27 +680,26 @@ async function buscarOLXHtml(bairro) {
     } catch (_) {}
   }
 
-  // Fallback: seletores CSS diretos
-  if (imoveis.length === 0) {
-    $('section[data-lurker-detail], li[data-lurker-detail], div[data-lurker-detail]').each((_, el) => {
-      const titulo = $(el).find('h2, h3').first().text().trim();
-      const precoText = $(el).find('[class*="price" i]').first().text().trim();
-      const preco = parseInt(precoText.replace(/\D/g, '')) || 0;
-      const href = $(el).find('a').first().attr('href') || '';
-      const link = href.startsWith('http') ? href.split('?')[0] : '';
-      if (titulo && preco > 0 && link) {
-        imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
-      }
-    });
-  }
-
   return imoveis;
 }
 
-// Função principal: tenta API, fallback HTML
+// Função principal: tenta RSS → API → HTML
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando OLX: ${bairro}`);
 
+  // Tenta RSS primeiro (mais leve, sem bloqueio)
+  try {
+    const imoveis = await buscarOLXRss(bairro);
+    if (imoveis.length > 0) {
+      const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+      console.log(`   ✓ ${unicos.length} imóveis via RSS`);
+      return unicos;
+    }
+  } catch (err) {
+    console.log(`   ⚠️ RSS falhou (${err.message}), tentando API...`);
+  }
+
+  // Tenta API mobile
   try {
     const imoveis = await buscarOLXApi(bairro);
     if (imoveis.length > 0) {
@@ -656,9 +708,10 @@ async function buscarOLX(bairro, region) {
       return unicos;
     }
   } catch (err) {
-    console.log(`   ⚠️ API OLX falhou (${err.message}), tentando HTML...`);
+    console.log(`   ⚠️ API falhou (${err.message}), tentando HTML...`);
   }
 
+  // Último recurso: HTML
   try {
     const imoveis = await buscarOLXHtml(bairro);
     const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
