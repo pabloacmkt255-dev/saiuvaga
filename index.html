@@ -94,9 +94,22 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
   .right { border-left: none; padding: 32px 24px; min-height: 100vh; }
+  .mobile-hero { display: block !important; }
   .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 28px; }
 }
 .mobile-logo { display: none; }
+
+/* Mobile Hero */
+.mobile-hero { display: none; background: var(--glt); border-radius: var(--r); padding: 16px; margin-bottom: 24px; }
+.mobile-hero-tag { display: inline-flex; align-items: center; gap: 5px; background: rgba(29,158,117,.15); border-radius: 99px; padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--gdk); margin-bottom: 10px; }
+.mobile-hero-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 800; color: var(--ink); line-height: 1.2; margin-bottom: 8px; }
+.mobile-hero-title em { font-style: normal; color: var(--g); }
+.mobile-hero-sub { font-size: 13px; color: var(--ink3); line-height: 1.5; margin-bottom: 12px; }
+.mobile-proof { display: flex; gap: 12px; }
+.mobile-proof-item { display: flex; flex-direction: column; }
+.mobile-proof-num { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1; }
+.mobile-proof-num span { color: var(--g); }
+.mobile-proof-label { font-size: 10px; color: var(--ink3); margin-top: 2px; }
 
 /* Botão WhatsApp Flutuante */
 .wpp-float{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
@@ -169,6 +182,20 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
     <div class="mobile-logo">
       <div class="logo-mark" style="width:32px;height:32px;border-radius:8px"><svg viewBox="0 0 18 18" fill="none" style="width:14px;height:14px"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
       SaiuVaga
+    </div>
+
+    <!-- Mobile Hero -->
+    <div class="mobile-hero">
+      <div class="mobile-hero-tag"><div class="pulse"></div>Ao vivo agora</div>
+      <div class="mobile-hero-title">A vaga que você quer <em>avisa você</em> em segundos.</div>
+      <div class="mobile-hero-sub">Monitoramos +104 portais em SP. Alertas direto no WhatsApp antes de todo mundo.</div>
+      <div class="mobile-proof">
+        <div class="mobile-proof-item"><div class="mobile-proof-num">1<span>m</span>47<span>s</span></div><div class="mobile-proof-label">tempo de alerta</div></div>
+        <div class="proof-div"></div>
+        <div class="mobile-proof-item"><div class="mobile-proof-num">104<span>+</span></div><div class="mobile-proof-label">portais</div></div>
+        <div class="proof-div"></div>
+        <div class="mobile-proof-item"><div class="mobile-proof-num">3<span>k+</span></div><div class="mobile-proof-label">usuários</div></div>
+      </div>
     </div>
 
     <div id="main-form">
