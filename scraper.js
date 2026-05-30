@@ -28,9 +28,51 @@ let waSocket = null;
 let waReady = false;
 let waQRCode = null;
 const AUTH_PATH = path.join('/tmp', 'baileys_auth');
+const SUPABASE_BUCKET = 'baileys-session';
+const SUPABASE_SESSION_FILE = 'creds.json';
+
+// ── Salva sessão Baileys no Supabase Storage ─────────────────
+async function salvarSessaoSupabase() {
+  try {
+    const credsPath = path.join(AUTH_PATH, 'creds.json');
+    if (!fs.existsSync(credsPath)) return;
+    const conteudo = fs.readFileSync(credsPath);
+    const { error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(SUPABASE_SESSION_FILE, conteudo, { upsert: true, contentType: 'application/json' });
+    if (error) console.log('   ⚠️ Erro ao salvar sessão no Supabase:', error.message);
+    else console.log('   💾 Sessão WhatsApp salva no Supabase!');
+  } catch (err) {
+    console.log('   ⚠️ salvarSessaoSupabase:', err.message);
+  }
+}
+
+// ── Restaura sessão Baileys do Supabase Storage ──────────────
+async function restaurarSessaoSupabase() {
+  try {
+    if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .download(SUPABASE_SESSION_FILE);
+    if (error || !data) {
+      console.log('   ℹ️ Nenhuma sessão salva encontrada — aguardando QR code.');
+      return false;
+    }
+    const buffer = Buffer.from(await data.arrayBuffer());
+    fs.writeFileSync(path.join(AUTH_PATH, 'creds.json'), buffer);
+    console.log('   ✅ Sessão WhatsApp restaurada do Supabase!');
+    return true;
+  } catch (err) {
+    console.log('   ⚠️ restaurarSessaoSupabase:', err.message);
+    return false;
+  }
+}
 
 async function iniciarBaileys() {
   if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
+
+  // Tenta restaurar sessão salva antes de pedir QR
+  await restaurarSessaoSupabase();
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
   const { version } = await fetchLatestBaileysVersion();
@@ -42,7 +84,11 @@ async function iniciarBaileys() {
     browser: ['SaiuVaga', 'Chrome', '124.0'],
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', async () => {
+    await saveCreds();
+    // Sincroniza credenciais atualizadas com Supabase
+    await salvarSessaoSupabase();
+  });
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
@@ -54,6 +100,8 @@ async function iniciarBaileys() {
       waReady = true;
       waQRCode = null;
       waSocket = sock;
+      // Salva sessão no Supabase para sobreviver a restarts
+      await salvarSessaoSupabase();
     }
     if (connection === 'close') {
       waReady = false;
