@@ -713,7 +713,7 @@ async function buscarVivaReal(bairro) {
   const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
   const { data } = await axiosProxy(url, {
     'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.vivareal.com.br', 'Origin': 'https://www.vivareal.com.br',
-  }, 25000);
+  }, 45000);
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -729,7 +729,7 @@ async function buscarVivaReal(bairro) {
 async function buscarMercadoLivre(bairro) {
   // ML tem API pública oficial — proxy ajuda a evitar rate limit por IP de datacenter
   const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
-  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 25000);
+  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 45000);
   return (data?.results || [])
     .filter(i => i.price && i.title && i.permalink)
     .map(i => ({
@@ -747,7 +747,7 @@ async function buscarImovelWeb(bairro) {
   const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
   const { data: xml } = await axiosProxy(url, {
     'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml',
-  }, 25000);
+  }, 45000);
   const $ = cheerio.load(xml, { xmlMode: true });
   const imoveis = [];
   $('item').each((_, el) => {
