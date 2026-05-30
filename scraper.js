@@ -50,7 +50,7 @@ async function iniciarBaileys() {
       console.log('\n📱 QR DISPONÍVEL EM: https://saiuvaga-production.up.railway.app/qr\n');
     }
     if (connection === 'open') {
-      console.log('✅ WhatsApp conectado via Baileys!');
+      console.log('✅ WhatsApp conectado via Baileys! connection=open');
       waReady = true;
       waQRCode = null;
       waSocket = sock;
@@ -67,6 +67,7 @@ async function iniciarBaileys() {
 
   // Recebe mensagens e encaminha para o chatbot
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    console.log(`📨 messages.upsert type=${type} count=${messages.length}`);
     if (type !== 'notify') return;
     for (const msg of messages) {
       if (msg.key.fromMe) continue;
