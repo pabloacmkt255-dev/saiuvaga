@@ -84,10 +84,14 @@ async function iniciarBaileys() {
     browser: ['SaiuVaga', 'Chrome', '124.0'],
   });
 
+  // Debounce para não salvar no Supabase a cada creds.update (pode disparar muitas vezes)
+  let credsUpdateTimer = null;
   sock.ev.on('creds.update', () => {
     saveCreds();
-    // Sincroniza credenciais atualizadas com Supabase (fire-and-forget)
-    salvarSessaoSupabase().catch(e => console.log('⚠️ creds.update save:', e.message));
+    if (credsUpdateTimer) clearTimeout(credsUpdateTimer);
+    credsUpdateTimer = setTimeout(() => {
+      salvarSessaoSupabase().catch(e => console.log('⚠️ creds.update save:', e.message));
+    }, 3000); // espera 3s estabilizar antes de salvar
   });
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
