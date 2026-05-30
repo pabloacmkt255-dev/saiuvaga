@@ -26,6 +26,7 @@ const fs = require('fs');
 
 let waSocket = null;
 let waReady = false;
+let waQRCode = null;
 const AUTH_PATH = path.join('/tmp', 'baileys_auth');
 
 async function iniciarBaileys() {
@@ -37,7 +38,6 @@ async function iniciarBaileys() {
   const sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: true, // QR aparece nos logs do Railway
     logger: pino({ level: 'silent' }),
     browser: ['SaiuVaga', 'Chrome', '124.0'],
   });
@@ -46,11 +46,13 @@ async function iniciarBaileys() {
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('\n📱 ESCANEIE O QR CODE ACIMA COM O WHATSAPP!\n');
+      waQRCode = qr;
+      console.log('\n📱 QR DISPONÍVEL EM: https://saiuvaga-production.up.railway.app/qr\n');
     }
     if (connection === 'open') {
       console.log('✅ WhatsApp conectado via Baileys!');
       waReady = true;
+      waQRCode = null;
       waSocket = sock;
     }
     if (connection === 'close') {
@@ -104,7 +106,32 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 
 // ── Rota de saúde ───────────────────────────────────────────
-app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅' }));
+app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅', whatsapp: waReady ? 'conectado' : 'aguardando QR' }));
+
+// ── Rota QR Code WhatsApp ────────────────────────────────────
+app.get('/qr', async (req, res) => {
+  if (waReady) return res.send('<h2>✅ WhatsApp já está conectado!</h2>');
+  if (!waQRCode) return res.send('<h2>⏳ Aguardando QR code... recarregue em 5 segundos.</h2><script>setTimeout(()=>location.reload(),5000)</script>');
+
+  try {
+    const QRCode = require('qrcode');
+    const qrImage = await QRCode.toDataURL(waQRCode);
+    res.send(`
+      <!DOCTYPE html><html><head><title>SaiuVaga — Conectar WhatsApp</title>
+      <meta http-equiv="refresh" content="30">
+      <style>body{font-family:sans-serif;text-align:center;padding:40px;background:#111;color:#fff}
+      img{width:300px;border:4px solid #25d366;border-radius:12px;padding:10px;background:#fff}</style></head>
+      <body>
+        <h2>📱 Escaneie com o WhatsApp</h2>
+        <p>Abra o WhatsApp → Configurações → Aparelhos vinculados → Vincular aparelho</p>
+        <img src="${qrImage}" alt="QR Code"/>
+        <p><small>Esta página recarrega automaticamente a cada 30s</small></p>
+      </body></html>
+    `);
+  } catch (err) {
+    res.status(500).send('Erro ao gerar QR: ' + err.message);
+  }
+});
 
 // ── Função WhatsApp unificada (Baileys direto) ───────────────
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
