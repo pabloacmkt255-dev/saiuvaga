@@ -72,7 +72,14 @@ async function iniciarBaileys() {
   if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
 
   // Tenta restaurar sessão salva antes de pedir QR
-  await restaurarSessaoSupabase();
+  // Se RESET_SESSION=true, ignora sessão salva e força novo QR
+  if (process.env.RESET_SESSION !== 'true') {
+    await restaurarSessaoSupabase();
+  } else {
+    console.log('🔄 RESET_SESSION=true — ignorando sessão salva, aguardando novo QR');
+    // Apaga sessão do Supabase também
+    await supabase.storage.from(SUPABASE_BUCKET).remove([SUPABASE_SESSION_FILE]).catch(() => {});
+  }
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
   const { version } = await fetchLatestBaileysVersion();
