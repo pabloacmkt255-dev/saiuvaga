@@ -73,11 +73,12 @@ async function iniciarBaileys() {
       if (msg.key.fromMe) continue;
       if (msg.key.remoteJid.includes('@g.us')) continue;
 
-      const phone = msg.key.remoteJid
+      const remoteJid = msg.key.remoteJid; // JID original para responder
+      const phone = remoteJid
         .replace('@s.whatsapp.net', '')
         .replace('@c.us', '')
         .replace('@lid', '')
-        .split(':')[0]; // remove sufixo :XX se houver
+        .split(':')[0];
       const text = (
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
@@ -85,8 +86,8 @@ async function iniciarBaileys() {
       ).trim();
 
       if (!phone || !text) continue;
-      console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
-      await processarMensagem(phone, text);
+      console.log(`\n💬 WhatsApp de ${phone} (jid=${remoteJid}): "${text}"`);
+      await processarMensagem(remoteJid, text); // usa JID original para responder
     }
   });
 }
@@ -149,8 +150,11 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
     `_Responda PARAR para cancelar alertas_`
   );
 
-  const numero = telefone.replace(/\D/g, '');
-  const jid = (numero.startsWith('55') ? numero : `55${numero}`) + '@s.whatsapp.net';
+  // Se já é um JID completo (contém @), usa direto; senão monta o JID
+  const jid = telefone.includes('@')
+    ? telefone
+    : (telefone.replace(/\D/g, '').startsWith('55') ? telefone.replace(/\D/g, '') : `55${telefone.replace(/\D/g, '')}`) + '@s.whatsapp.net';
+  console.log(`   📲 Enviando para JID: ${jid}`);
 
   if (!waReady || !waSocket) {
     console.log(`   ⚠️ WhatsApp não conectado ainda — mensagem não enviada para ${telefone}`);
