@@ -90,7 +90,7 @@ async function iniciarBaileys() {
     salvarSessaoSupabase().catch(e => console.log('⚠️ creds.update save:', e.message));
   });
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       waQRCode = qr;
       console.log('\n📱 QR DISPONÍVEL EM: https://saiuvaga-production.up.railway.app/qr\n');
