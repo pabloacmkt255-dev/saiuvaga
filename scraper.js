@@ -166,6 +166,30 @@ app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 // ── Rota de saúde ───────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅', whatsapp: waReady ? 'conectado' : 'aguardando QR' }));
 
+// ── Rota Reset WhatsApp (força novo QR) ─────────────────────
+app.get('/reset-whatsapp', async (req, res) => {
+  try {
+    // Apaga sessão local
+    if (fs.existsSync(AUTH_PATH)) {
+      fs.rmSync(AUTH_PATH, { recursive: true, force: true });
+      console.log('🗑️ Sessão local apagada');
+    }
+    // Apaga sessão no Supabase
+    await supabase.storage.from(SUPABASE_BUCKET).remove([SUPABASE_SESSION_FILE]);
+    console.log('🗑️ Sessão Supabase apagada');
+    // Desconecta socket atual
+    if (waSocket) {
+      waReady = false;
+      waSocket = null;
+    }
+    // Reinicia Baileys após 2s
+    setTimeout(iniciarBaileys, 2000);
+    res.send('<h2>✅ Sessão apagada! <a href="/qr">Clique aqui para escanear novo QR</a></h2><script>setTimeout(()=>location.href="/qr",3000)</script>');
+  } catch (err) {
+    res.status(500).send('Erro: ' + err.message);
+  }
+});
+
 // ── Rota QR Code WhatsApp ────────────────────────────────────
 app.get('/qr', async (req, res) => {
   if (waReady) return res.send('<h2>✅ WhatsApp já está conectado!</h2>');
