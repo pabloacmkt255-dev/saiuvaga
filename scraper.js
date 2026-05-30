@@ -598,169 +598,134 @@ app.get('/api/evolution/status', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// SCRAPER — Direto na OLX (sem Apify, sem custo)
+// SCRAPER MODULAR — ZAP + VivaReal + MercadoLivre + ImovelWeb
+// Todas as fontes rodam em paralelo com fallback automático
 // ─────────────────────────────────────────────────────────────
 
 const BUSCAS = [
   { bairro: 'Pinheiros',     region: 'pinheiros'     },
   { bairro: 'Vila Madalena', region: 'vila-madalena' },
   { bairro: 'Faria Lima',    region: 'faria-lima'    },
+  { bairro: 'Moema',         region: 'moema'         },
+  { bairro: 'Itaim Bibi',    region: 'itaim-bibi'    },
 ];
 
-// Headers que imitam um navegador real
-const HEADERS_BROWSER = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-  'Accept-Language': 'pt-BR,pt;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'Upgrade-Insecure-Requests': '1',
-};
+// Converte bairro para slug de URL
+function toSlug(str) {
+  return str.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+}
 
-// Estratégia 1: RSS público OLX (não tem bloqueio 403 em servidor)
-async function buscarOLXRss(bairro) {
-  // OLX disponibiliza RSS para cada busca — JSON limpo, sem Cloudflare
-  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}&o=1&f=p`;
+// ── SOURCE 1: ZAP Imóveis ────────────────────────────────────
+async function buscarZap(bairro) {
+  const slug = toSlug(bairro);
+  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
+  const { data } = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.zapimoveis.com.br', 'Origin': 'https://www.zapimoveis.com.br' },
+    timeout: 15000,
+  });
+  return (data?.search?.result?.listings || [])
+    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+    .map(i => ({
+      titulo: i.listing.title || `Imóvel - ${bairro}`,
+      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+      bairro, tipo: 'residencial', portal: 'ZAP',
+      link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+    }))
+    .filter(i => i.preco > 0 && i.link.length > 30);
+}
 
-  const { data: xml } = await axios.get(
-    url.replace('www.olx.com.br', 'www.olx.com.br').replace('?', '.rss?'),
-    {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
-        'Accept': 'application/rss+xml, application/xml, text/xml',
-      },
-      timeout: 20000,
-    }
-  );
+// ── SOURCE 2: VivaReal ────────────────────────────────────────
+async function buscarVivaReal(bairro) {
+  const slug = toSlug(bairro);
+  const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
+  const { data } = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.vivareal.com.br', 'Origin': 'https://www.vivareal.com.br' },
+    timeout: 15000,
+  });
+  return (data?.search?.result?.listings || [])
+    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+    .map(i => ({
+      titulo: i.listing.title || `Imóvel - ${bairro}`,
+      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+      bairro, tipo: 'residencial', portal: 'VivaReal',
+      link: `https://www.vivareal.com.br${i.link?.href || ''}`,
+    }))
+    .filter(i => i.preco > 0 && i.link.length > 30);
+}
 
+// ── SOURCE 3: Mercado Livre Imóveis (API oficial pública) ─────
+async function buscarMercadoLivre(bairro) {
+  // ML tem API pública oficial sem bloqueio
+  const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
+  const { data } = await axios.get(url, {
+    headers: { 'Accept': 'application/json' },
+    timeout: 15000,
+  });
+  return (data?.results || [])
+    .filter(i => i.price && i.title && i.permalink)
+    .map(i => ({
+      titulo: i.title,
+      preco: parseInt(i.price) || 0,
+      bairro, tipo: 'residencial', portal: 'MercadoLivre',
+      link: i.permalink.split('?')[0],
+    }))
+    .filter(i => i.preco > 0);
+}
+
+// ── SOURCE 4: ImovelWeb (RSS feed público) ────────────────────
+async function buscarImovelWeb(bairro) {
+  const slug = toSlug(bairro);
+  const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
+  const { data: xml } = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml' },
+    timeout: 15000,
+  });
   const $ = cheerio.load(xml, { xmlMode: true });
   const imoveis = [];
-
   $('item').each((_, el) => {
-    const titulo = $(el).find('title').first().text().trim();
-    const link = $(el).find('link').first().text().trim() || $(el).find('guid').text().trim();
+    const titulo = $(el).find('title').text().trim();
+    const link = $(el).find('link').text().trim() || $(el).find('guid').text().trim();
     const desc = $(el).find('description').text();
-    const precoMatch = desc.match(/R\$\s*([\d.,]+)/) || titulo.match(/R\$\s*([\d.,]+)/);
+    const precoMatch = desc.match(/R\$[\s]?([\d.,]+)/) || titulo.match(/R\$[\s]?([\d.,]+)/);
     const preco = precoMatch ? parseInt(precoMatch[1].replace(/\D/g, '')) : 0;
-
     if (titulo && link && preco > 0) {
-      imoveis.push({
-        titulo,
-        preco,
-        bairro,
-        tipo: 'residencial',
-        portal: 'OLX',
-        link: link.split('?')[0],
-      });
+      imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'ImovelWeb', link: link.split('?')[0] });
     }
   });
-
   return imoveis;
 }
 
-// Estratégia 2: API JSON da OLX (endpoint mobile/pwa)
-async function buscarOLXApi(bairro) {
-  // Endpoint usado pelo app mobile OLX — menos protegido que o site
-  const url = `https://www.olx.com.br/api/pwa/v2/listings?q=${encodeURIComponent(bairro)}&sc=1020&re=11&o=1`;
-
-  const { data } = await axios.get(url, {
-    headers: {
-      'User-Agent': 'OLXBrasil/14.0.0 (Android 12)',
-      'Accept': 'application/json',
-      'x-app-version': '14.0.0',
-      'x-platform': 'android',
-    },
-    timeout: 20000,
-  });
-
-  const listings = data?.data?.listing?.items || data?.listing?.items || data?.ads || [];
-
-  return listings
-    .filter(item => item.price && (item.subject || item.title))
-    .map(item => ({
-      titulo: item.subject || item.title || '',
-      preco: parseInt(String(item.price || '0').replace(/\D/g, '')) || 0,
-      bairro,
-      tipo: 'residencial',
-      portal: 'OLX',
-      link: (item.url || '').split('?')[0],
-    }))
-    .filter(i => i.preco > 0 && i.link);
-}
-
-// Estratégia 3: HTML com __NEXT_DATA__ (último recurso)
-async function buscarOLXHtml(bairro) {
-  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp?q=${encodeURIComponent(bairro)}`;
-  const { data: html } = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
-      'Accept': 'text/html',
-      'Accept-Language': 'pt-BR,pt;q=0.9',
-    },
-    timeout: 30000,
-  });
-
-  const $ = cheerio.load(html);
-  const imoveis = [];
-
-  const nextDataEl = $('script#__NEXT_DATA__').html();
-  if (nextDataEl) {
-    try {
-      const json = JSON.parse(nextDataEl);
-      const ads = json?.props?.pageProps?.ads || [];
-      for (const ad of ads) {
-        const titulo = ad.subject || ad.title || '';
-        const preco = parseInt(String(ad.price?.value || ad.price || '0').replace(/\D/g, '')) || 0;
-        const link = (ad.url || '').split('?')[0];
-        if (titulo && preco > 0 && link) {
-          imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
-        }
-      }
-    } catch (_) {}
-  }
-
-  return imoveis;
-}
-
-// Função principal: tenta RSS → API → HTML
+// ── FUNÇÃO PRINCIPAL: todas as fontes em paralelo ─────────────
 async function buscarOLX(bairro, region) {
-  console.log(`\n🔍 Buscando OLX: ${bairro}`);
+  console.log(`\n🔍 Buscando imóveis: ${bairro}`);
 
-  // Tenta RSS primeiro (mais leve, sem bloqueio)
-  try {
-    const imoveis = await buscarOLXRss(bairro);
-    if (imoveis.length > 0) {
-      const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-      console.log(`   ✓ ${unicos.length} imóveis via RSS`);
-      return unicos;
+  // Roda todas as fontes em paralelo — se uma falha, as outras continuam
+  const resultados = await Promise.allSettled([
+    buscarZap(bairro),
+    buscarVivaReal(bairro),
+    buscarMercadoLivre(bairro),
+    buscarImovelWeb(bairro),
+  ]);
+
+  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb'];
+  const todos = [];
+
+  resultados.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value.length > 0) {
+      console.log(`   ✓ ${r.value.length} imóveis via ${fontes[i]}`);
+      todos.push(...r.value);
+    } else {
+      const err = r.status === 'rejected' ? r.reason?.message : 'sem resultados';
+      console.log(`   ⚠️ ${fontes[i]}: ${err}`);
     }
-  } catch (err) {
-    console.log(`   ⚠️ RSS falhou (${err.message}), tentando API...`);
-  }
+  });
 
-  // Tenta API mobile
-  try {
-    const imoveis = await buscarOLXApi(bairro);
-    if (imoveis.length > 0) {
-      const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-      console.log(`   ✓ ${unicos.length} imóveis via API`);
-      return unicos;
-    }
-  } catch (err) {
-    console.log(`   ⚠️ API falhou (${err.message}), tentando HTML...`);
-  }
-
-  // Último recurso: HTML
-  try {
-    const imoveis = await buscarOLXHtml(bairro);
-    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imóveis via HTML`);
-    return unicos;
-  } catch (err) {
-    console.error(`   ✗ Erro scraper OLX: ${err.message}`);
-    return [];
-  }
+  const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
+  console.log(`   📦 Total: ${unicos.length} imóveis únicos de ${bairro}`);
+  return unicos;
 }
 
 async function salvarImoveis(imoveis) {
