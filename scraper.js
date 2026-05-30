@@ -600,7 +600,30 @@ app.get('/api/evolution/status', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // SCRAPER MODULAR — ZAP + VivaReal + MercadoLivre + ImovelWeb
 // Todas as fontes rodam em paralelo com fallback automático
+// Usa ScraperAPI como proxy rotativo residencial para bypassar 403
 // ─────────────────────────────────────────────────────────────
+
+// ── Helper ScraperAPI ─────────────────────────────────────────
+// Envolve qualquer URL com o proxy da ScraperAPI (IPs residenciais)
+// Fallback automático: se SCRAPERAPI_KEY não estiver definida, faz requisição direta
+function scraperApiUrl(targetUrl) {
+  const key = process.env.SCRAPERAPI_KEY;
+  if (!key) return targetUrl; // sem proxy se não tiver key
+  return `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(targetUrl)}`;
+}
+
+// Faz request via ScraperAPI com headers customizados
+async function axiosProxy(url, headers = {}, timeout = 25000) {
+  const key = process.env.SCRAPERAPI_KEY;
+  if (key) {
+    // Via ScraperAPI: envia a URL como parâmetro, headers via query params não funcionam
+    // então usamos o modo direto com headers injetados pelo proxy
+    const proxyUrl = `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}&keep_headers=true`;
+    return axios.get(proxyUrl, { headers, timeout });
+  }
+  // Fallback direto
+  return axios.get(url, { headers, timeout });
+}
 
 const BUSCAS = [
   { bairro: 'Pinheiros',     region: 'pinheiros'     },
@@ -622,10 +645,9 @@ function toSlug(str) {
 async function buscarZap(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axios.get(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.zapimoveis.com.br', 'Origin': 'https://www.zapimoveis.com.br' },
-    timeout: 15000,
-  });
+  const { data } = await axiosProxy(url, {
+    'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.zapimoveis.com.br', 'Origin': 'https://www.zapimoveis.com.br',
+  }, 25000);
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -641,10 +663,9 @@ async function buscarZap(bairro) {
 async function buscarVivaReal(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axios.get(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.vivareal.com.br', 'Origin': 'https://www.vivareal.com.br' },
-    timeout: 15000,
-  });
+  const { data } = await axiosProxy(url, {
+    'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'x-domain': 'www.vivareal.com.br', 'Origin': 'https://www.vivareal.com.br',
+  }, 25000);
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -658,12 +679,9 @@ async function buscarVivaReal(bairro) {
 
 // ── SOURCE 3: Mercado Livre Imóveis (API oficial pública) ─────
 async function buscarMercadoLivre(bairro) {
-  // ML tem API pública oficial sem bloqueio
+  // ML tem API pública oficial — proxy ajuda a evitar rate limit por IP de datacenter
   const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
-  const { data } = await axios.get(url, {
-    headers: { 'Accept': 'application/json' },
-    timeout: 15000,
-  });
+  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 25000);
   return (data?.results || [])
     .filter(i => i.price && i.title && i.permalink)
     .map(i => ({
@@ -679,10 +697,9 @@ async function buscarMercadoLivre(bairro) {
 async function buscarImovelWeb(bairro) {
   const slug = toSlug(bairro);
   const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
-  const { data: xml } = await axios.get(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml' },
-    timeout: 15000,
-  });
+  const { data: xml } = await axiosProxy(url, {
+    'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml',
+  }, 25000);
   const $ = cheerio.load(xml, { xmlMode: true });
   const imoveis = [];
   $('item').each((_, el) => {
