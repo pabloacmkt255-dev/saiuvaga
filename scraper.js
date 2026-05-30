@@ -73,7 +73,11 @@ async function iniciarBaileys() {
       if (msg.key.fromMe) continue;
       if (msg.key.remoteJid.includes('@g.us')) continue;
 
-      const phone = msg.key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      const phone = msg.key.remoteJid
+        .replace('@s.whatsapp.net', '')
+        .replace('@c.us', '')
+        .replace('@lid', '')
+        .split(':')[0]; // remove sufixo :XX se houver
       const text = (
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
