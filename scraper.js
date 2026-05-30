@@ -660,16 +660,48 @@ function scraperApiUrl(targetUrl) {
   return `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(targetUrl)}`;
 }
 
-// Faz request via ScraperAPI com headers customizados
-async function axiosProxy(url, headers = {}, timeout = 25000) {
-  const key = process.env.SCRAPERAPI_KEY;
-  if (key) {
-    // Via ScraperAPI: envia a URL como parâmetro, headers via query params não funcionam
-    // então usamos o modo direto com headers injetados pelo proxy
-    const proxyUrl = `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}&keep_headers=true`;
-    return axios.get(proxyUrl, { headers, timeout });
+// Faz request com fallback automático entre proxies:
+// 1. ScraperAPI → 2. Scrape.do → 3. BrightData → 4. Direto
+async function axiosProxy(url, headers = {}, timeout = 45000) {
+  const scraperApiKey = process.env.SCRAPERAPI_KEY;
+  const scrapeDoKey   = process.env.SCRAPEDO_KEY;
+  const brightDataKey = process.env.BRIGHTDATA_KEY;
+
+  // Tenta ScraperAPI
+  if (scraperApiKey) {
+    try {
+      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&keep_headers=true`;
+      const res = await axios.get(proxyUrl, { headers, timeout });
+      return res;
+    } catch (e) {
+      console.log(`   ↩️ ScraperAPI falhou (${e.message.slice(0,40)}), tentando Scrape.do...`);
+    }
   }
-  // Fallback direto
+
+  // Tenta Scrape.do
+  if (scrapeDoKey) {
+    try {
+      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}`;
+      const res = await axios.get(proxyUrl, { headers, timeout });
+      return res;
+    } catch (e) {
+      console.log(`   ↩️ Scrape.do falhou (${e.message.slice(0,40)}), tentando BrightData...`);
+    }
+  }
+
+  // Tenta BrightData (proxy HTTP residencial)
+  if (brightDataKey) {
+    try {
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      const proxyAgent = new HttpsProxyAgent(`https://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:33335`);
+      const res = await axios.get(url, { headers, timeout, httpsAgent: proxyAgent, httpAgent: proxyAgent });
+      return res;
+    } catch (e) {
+      console.log(`   ↩️ BrightData falhou (${e.message.slice(0,40)}), tentando direto...`);
+    }
+  }
+
+  // Fallback direto (sem proxy)
   return axios.get(url, { headers, timeout });
 }
 
