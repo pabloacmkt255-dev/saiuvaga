@@ -17,10 +17,75 @@ const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
-// ── Config Evolution API ─────────────────────────────────────
-const EVOLUTION_URL = process.env.EVOLUTION_URL || 'https://evolution-api-production-b0b4a.up.railway.app';
-const EVOLUTION_KEY = process.env.EVOLUTION_KEY || 'saiuvaga2024evolution';
-const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'saiuvaga';
+// ── WhatsApp via Baileys (direto, sem Evolution API) ─────────
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const pino = require('pino');
+const path = require('path');
+const fs = require('fs');
+
+let waSocket = null;
+let waReady = false;
+const AUTH_PATH = path.join('/tmp', 'baileys_auth');
+
+async function iniciarBaileys() {
+  if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
+
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
+  const { version } = await fetchLatestBaileysVersion();
+
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: true, // QR aparece nos logs do Railway
+    logger: pino({ level: 'silent' }),
+    browser: ['SaiuVaga', 'Chrome', '124.0'],
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      console.log('\n📱 ESCANEIE O QR CODE ACIMA COM O WHATSAPP!\n');
+    }
+    if (connection === 'open') {
+      console.log('✅ WhatsApp conectado via Baileys!');
+      waReady = true;
+      waSocket = sock;
+    }
+    if (connection === 'close') {
+      waReady = false;
+      const shouldReconnect = (lastDisconnect?.error instanceof Boom)
+        ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
+        : true;
+      console.log('⚠️ WhatsApp desconectado. Reconectando:', shouldReconnect);
+      if (shouldReconnect) setTimeout(iniciarBaileys, 5000);
+    }
+  });
+
+  // Recebe mensagens e encaminha para o chatbot
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const msg of messages) {
+      if (msg.key.fromMe) continue;
+      if (msg.key.remoteJid.includes('@g.us')) continue;
+
+      const phone = msg.key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      const text = (
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption || ''
+      ).trim();
+
+      if (!phone || !text) continue;
+      console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
+      await processarMensagem(phone, text);
+    }
+  });
+}
+
+// Inicia Baileys ao subir o servidor
+iniciarBaileys().catch(console.error);
 
 // ── Servidor Express ────────────────────────────────────────
 const app = express();
@@ -41,7 +106,7 @@ app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 // ── Rota de saúde ───────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅' }));
 
-// ── Função WhatsApp unificada (Evolution API) ────────────────
+// ── Função WhatsApp unificada (Baileys direto) ───────────────
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   const mensagem = mensagemLivre || (
     `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
@@ -53,27 +118,19 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   );
 
   const numero = telefone.replace(/\D/g, '');
-  const numeroFormatado = numero.startsWith('55') ? numero : `55${numero}`;
+  const jid = (numero.startsWith('55') ? numero : `55${numero}`) + '@s.whatsapp.net';
+
+  if (!waReady || !waSocket) {
+    console.log(`   ⚠️ WhatsApp não conectado ainda — mensagem não enviada para ${telefone}`);
+    return false;
+  }
 
   try {
-    await axios.post(
-      `${EVOLUTION_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
-      {
-        number: numeroFormatado,
-        text: mensagem,
-      },
-      {
-        headers: {
-          'apikey': EVOLUTION_KEY,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }
-    );
+    await waSocket.sendMessage(jid, { text: mensagem });
     console.log(`   📲 WhatsApp enviado para ${telefone}`);
     return true;
   } catch (err) {
-    console.error(`   ✗ Erro Evolution API: ${err.message}`);
+    console.error(`   ✗ Erro Baileys: ${err.message}`);
     return false;
   }
 }
@@ -361,61 +418,9 @@ app.get('/api/whatsapp/webhook', (req, res) => {
   res.json({ ok: true, status: 'SaiuVaga Chatbot ativo ✅' });
 });
 
-app.post('/api/whatsapp/webhook', async (req, res) => {
-  res.sendStatus(200);
-
+// ── Função de processar mensagem (usada pelo Baileys e webhook) ─
+async function processarMensagem(phone, text) {
   try {
-    const body = req.body;
-    console.log('\n📩 RAW WEBHOOK:', JSON.stringify(body).slice(0, 600));
-
-    // Formato Evolution API v2 — suporta múltiplos formatos de payload
-    const remoteJid = (
-      body?.data?.key?.remoteJid ||
-      body?.data?.remoteJid ||
-      body?.key?.remoteJid ||
-      body?.remoteJid || ''
-    );
-
-    // Ignora grupos e mensagens próprias
-    const fromMe = body?.data?.key?.fromMe || body?.key?.fromMe || false;
-    if (fromMe) return;
-    if (remoteJid.includes('@g.us')) return;
-
-    // Extrai phone limpando sufixo WhatsApp
-    const phone = remoteJid
-      .replace('@s.whatsapp.net', '')
-      .replace('@lid', '')
-      .replace('@c.us', '')
-      || body?.data?.sender
-      || body?.sender
-      || body?.phone
-      || body?.from
-      || '';
-
-    // Extrai texto suportando todos os tipos de mensagem
-    const text = (
-      body?.data?.message?.conversation ||
-      body?.data?.message?.extendedTextMessage?.text ||
-      body?.data?.message?.imageMessage?.caption ||
-      body?.data?.message?.videoMessage?.caption ||
-      body?.data?.message?.buttonsResponseMessage?.selectedDisplayText ||
-      body?.data?.message?.listResponseMessage?.title ||
-      body?.message?.conversation ||
-      body?.message?.extendedTextMessage?.text ||
-      body?.text?.message ||
-      body?.body || ''
-    ).trim();
-
-    console.log(`   📱 phone=${phone} text="${text}"`);
-
-    if (!phone || !text) {
-      console.log(`   ⚠️ phone ou text vazio, ignorando`);
-      return;
-    }
-
-    console.log(`\n💬 WhatsApp de ${phone}: "${text}"`);
-
-    // Busca dados do usuário no Supabase
     const numero = phone.replace(/\D/g, '').replace(/^55/, '');
     const { data: user } = await supabase
       .from('users')
@@ -488,20 +493,19 @@ Responda como assistente do SaiuVaga:`;
     );
 
     const data = await resposta.json();
-    console.log('   🤖 Groq raw:', JSON.stringify(data).slice(0, 200));
     const mensagem = data.choices?.[0]?.message?.content;
-
-    if (!mensagem) {
-      console.log('   ⚠️ Groq não respondeu — erro:', data?.error?.message || 'sem choices');
-      return;
-    }
+    if (!mensagem) return;
 
     await enviarWhatsApp(phone, null, mensagem);
     console.log(`   🤖 Resposta enviada para ${phone}`);
-
   } catch (err) {
     console.error('❌ Erro chatbot:', err.message);
   }
+}
+
+// Webhook mantido para compatibilidade (não é mais necessário com Baileys)
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  res.sendStatus(200);
 });
 
 // ── Rota para criar instância Evolution API ──────────────────
