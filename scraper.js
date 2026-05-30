@@ -84,10 +84,10 @@ async function iniciarBaileys() {
     browser: ['SaiuVaga', 'Chrome', '124.0'],
   });
 
-  sock.ev.on('creds.update', async () => {
-    await saveCreds();
-    // Sincroniza credenciais atualizadas com Supabase
-    await salvarSessaoSupabase();
+  sock.ev.on('creds.update', () => {
+    saveCreds();
+    // Sincroniza credenciais atualizadas com Supabase (fire-and-forget)
+    salvarSessaoSupabase().catch(e => console.log('⚠️ creds.update save:', e.message));
   });
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
