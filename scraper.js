@@ -129,6 +129,7 @@ async function iniciarBaileys() {
     console.log(`📨 messages.upsert type=${type} count=${messages.length}`);
     if (type !== 'notify') return;
     for (const msg of messages) {
+      console.log(`   📨 msg jid=${msg.key.remoteJid} fromMe=${msg.key.fromMe}`);
       if (msg.key.fromMe) continue;
       if (msg.key.remoteJid.includes('@g.us')) continue;
 
