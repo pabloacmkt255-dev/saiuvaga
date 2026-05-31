@@ -703,25 +703,27 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   const scrapeDoKey   = process.env.SCRAPEDO_KEY;
   const brightDataKey = process.env.BRIGHTDATA_KEY;
 
-  // Tenta ScraperAPI
+  // Tenta ScraperAPI (render=true bypassa 403, country_code=br mantém IP brasileiro)
   if (scraperApiKey) {
     try {
-      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&keep_headers=true`;
-      const res = await axios.get(proxyUrl, { headers, timeout });
+      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&render=true&country_code=br&keep_headers=true`;
+      const res = await axios.get(proxyUrl, { headers, timeout: Math.max(timeout, 60000) });
+      if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
-      console.log(`   ↩️ ScraperAPI falhou (${e.message.slice(0,40)}), tentando Scrape.do...`);
+      console.log(`   ↩️ ScraperAPI falhou (${e.message.slice(0,50)}), tentando Scrape.do...`);
     }
   }
 
-  // Tenta Scrape.do
+  // Tenta Scrape.do (render=true para bypass de JS challenge)
   if (scrapeDoKey) {
     try {
-      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}`;
-      const res = await axios.get(proxyUrl, { headers, timeout });
+      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}&render=true&geoCode=br`;
+      const res = await axios.get(proxyUrl, { headers, timeout: Math.max(timeout, 60000) });
+      if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
-      console.log(`   ↩️ Scrape.do falhou (${e.message.slice(0,40)}), tentando BrightData...`);
+      console.log(`   ↩️ Scrape.do falhou (${e.message.slice(0,50)}), tentando BrightData...`);
     }
   }
 
