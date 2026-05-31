@@ -703,11 +703,11 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   const scrapeDoKey   = process.env.SCRAPEDO_KEY;
   const brightDataKey = process.env.BRIGHTDATA_KEY;
 
-  // Tenta ScraperAPI (render=true bypassa 403, country_code=br mantém IP brasileiro)
+  // Tenta ScraperAPI (modo simples — sem render, mais rápido e econômico)
   if (scraperApiKey) {
     try {
-      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&render=true&country_code=br&keep_headers=true`;
-      const res = await axios.get(proxyUrl, { headers, timeout: Math.max(timeout, 60000) });
+      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&country_code=br&keep_headers=true`;
+      const res = await axios.get(proxyUrl, { headers, timeout });
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
@@ -715,11 +715,11 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
     }
   }
 
-  // Tenta Scrape.do (render=true para bypass de JS challenge)
+  // Tenta Scrape.do
   if (scrapeDoKey) {
     try {
-      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}&render=true&geoCode=br`;
-      const res = await axios.get(proxyUrl, { headers, timeout: Math.max(timeout, 60000) });
+      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}&geoCode=br`;
+      const res = await axios.get(proxyUrl, { headers, timeout });
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
@@ -764,27 +764,13 @@ function toSlug(str) {
 async function buscarZap(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  // ZAP funciona direto — tenta sem proxy primeiro, proxy como fallback
-  let data;
-  try {
-    const res = await axios.get(url, { headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'x-domain': 'www.zapimoveis.com.br',
-      'Origin': 'https://www.zapimoveis.com.br',
-      'Referer': 'https://www.zapimoveis.com.br/',
-    }, timeout: 30000 });
-    data = res.data;
-  } catch (e) {
-    const res = await axiosProxy(url, {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'x-domain': 'www.zapimoveis.com.br',
-      'Origin': 'https://www.zapimoveis.com.br',
-      'Referer': 'https://www.zapimoveis.com.br/',
-    }, 45000);
-    data = res.data;
-  }
+  const { data } = await axiosProxy(url, {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+    'x-domain': 'www.zapimoveis.com.br',
+    'Origin': 'https://www.zapimoveis.com.br',
+    'Referer': 'https://www.zapimoveis.com.br/',
+  }, 45000);
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -800,27 +786,13 @@ async function buscarZap(bairro) {
 async function buscarVivaReal(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  // VivaReal — mesma infra do ZAP, tenta direto primeiro
-  let data;
-  try {
-    const res = await axios.get(url, { headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'x-domain': 'www.vivareal.com.br',
-      'Origin': 'https://www.vivareal.com.br',
-      'Referer': 'https://www.vivareal.com.br/',
-    }, timeout: 30000 });
-    data = res.data;
-  } catch (e) {
-    const res = await axiosProxy(url, {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'x-domain': 'www.vivareal.com.br',
-      'Origin': 'https://www.vivareal.com.br',
-      'Referer': 'https://www.vivareal.com.br/',
-    }, 45000);
-    data = res.data;
-  }
+  const { data } = await axiosProxy(url, {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+    'x-domain': 'www.vivareal.com.br',
+    'Origin': 'https://www.vivareal.com.br',
+    'Referer': 'https://www.vivareal.com.br/',
+  }, 45000);
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -836,8 +808,7 @@ async function buscarVivaReal(bairro) {
 async function buscarMercadoLivre(bairro) {
   // ML tem API pública oficial — proxy ajuda a evitar rate limit por IP de datacenter
   const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
-  // MercadoLivre tem API oficial pública — vai direto
-  const { data } = await axios.get(url, { headers: { 'Accept': 'application/json' }, timeout: 30000 });
+  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 45000);
   return (data?.results || [])
     .filter(i => i.price && i.title && i.permalink)
     .map(i => ({
@@ -853,10 +824,9 @@ async function buscarMercadoLivre(bairro) {
 async function buscarImovelWeb(bairro) {
   const slug = toSlug(bairro);
   const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
-  // ImovelWeb RSS público — vai direto
-  const { data: xml } = await axios.get(url, { headers: {
+  const { data: xml } = await axiosProxy(url, {
     'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml',
-  }, timeout: 30000 });
+  }, 45000);
   const $ = cheerio.load(xml, { xmlMode: true });
   const imoveis = [];
   $('item').each((_, el) => {
