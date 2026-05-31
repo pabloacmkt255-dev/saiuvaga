@@ -132,6 +132,11 @@ async function iniciarBaileys() {
       console.log(`   📨 msg jid=${msg.key.remoteJid} fromMe=${msg.key.fromMe}`);
       if (msg.key.fromMe) continue;
       if (msg.key.remoteJid.includes('@g.us')) continue;
+      // Aceita @s.whatsapp.net, @c.us e @lid (novo formato do WhatsApp)
+      const isValidJid = msg.key.remoteJid.includes('@s.whatsapp.net') ||
+                         msg.key.remoteJid.includes('@c.us') ||
+                         msg.key.remoteJid.includes('@lid');
+      if (!isValidJid) continue;
 
       const remoteJid = msg.key.remoteJid; // JID original para responder
       const phone = remoteJid
@@ -142,10 +147,15 @@ async function iniciarBaileys() {
       const text = (
         msg.message?.conversation ||
         msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption || ''
+        msg.message?.imageMessage?.caption ||
+        msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+        msg.message?.listResponseMessage?.title || ''
       ).trim();
 
-      if (!phone || !text) continue;
+      if (!phone || !text) {
+        console.log(`   ⚠️ Mensagem sem texto ou phone inválido — jid=${remoteJid}`);
+        continue;
+      }
       console.log(`\n💬 WhatsApp de ${phone} (jid=${remoteJid}): "${text}"`);
       await processarMensagem(remoteJid, text); // usa JID original para responder
     }
