@@ -842,6 +842,44 @@ async function buscarImovelWeb(bairro) {
   return imoveis;
 }
 
+// ── SOURCE 5: QuintoAndar (API interna pública, funciona sem proxy) ──
+const COORDS_BAIRROS = {
+  'Pinheiros':     ['-23.566', '-46.683'],
+  'Vila Madalena': ['-23.556', '-46.691'],
+  'Faria Lima':    ['-23.578', '-46.679'],
+  'Moema':         ['-23.601', '-46.664'],
+  'Itaim Bibi':    ['-23.585', '-46.676'],
+};
+
+async function buscarQuintoAndar(bairro) {
+  const coords = COORDS_BAIRROS[bairro];
+  if (!coords) return [];
+  const url = `https://www.quintoandar.com.br/api/yellow-pages/search?q=(and tipo:'Apartamento'(and (and for_rent:'true')))&fq=local:['${coords[0]}','${coords[1]}']&return=id,local,aluguel,area,quartos,custo,endereco,regiao_nome,tipo&size=50&q.parser=structured`;
+  try {
+    const res = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://www.quintoandar.com.br/',
+      },
+      timeout: 30000,
+    });
+    return (res.data?.hits?.hit || [])
+      .filter(i => i.fields?.custo)
+      .map(i => ({
+        titulo: `Apartamento ${i.fields.quartos || '?'} quartos - ${i.fields.regiao_nome || bairro}`,
+        preco: parseInt(i.fields.custo) || parseInt(i.fields.aluguel) || 0,
+        bairro,
+        tipo: 'residencial',
+        portal: 'QuintoAndar',
+        link: `https://www.quintoandar.com.br/imovel/${i.id}`,
+      }))
+      .filter(i => i.preco > 0);
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
 // ── FUNÇÃO PRINCIPAL: todas as fontes em paralelo ─────────────
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imóveis: ${bairro}`);
@@ -852,9 +890,10 @@ async function buscarOLX(bairro, region) {
     buscarVivaReal(bairro),
     buscarMercadoLivre(bairro),
     buscarImovelWeb(bairro),
+    buscarQuintoAndar(bairro),
   ]);
 
-  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb'];
+  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb', 'QuintoAndar'];
   const todos = [];
 
   resultados.forEach((r, i) => {
