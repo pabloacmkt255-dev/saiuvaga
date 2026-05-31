@@ -880,6 +880,51 @@ async function buscarQuintoAndar(bairro) {
   }
 }
 
+
+// ── SOURCE: OLX (API interna — funciona direto sem proxy) ──────
+const OLX_REGIOES = {
+  'Pinheiros':     { location_id: 1001072, neighborhood: 'pinheiros' },
+  'Vila Madalena': { location_id: 1001072, neighborhood: 'vila-madalena' },
+  'Faria Lima':    { location_id: 1001072, neighborhood: 'itaim-bibi' },
+  'Moema':         { location_id: 1001072, neighborhood: 'moema' },
+  'Itaim Bibi':    { location_id: 1001072, neighborhood: 'itaim-bibi' },
+};
+
+async function buscarOLXAPI(bairro) {
+  // OLX API de busca — retorna JSON sem bloqueio de datacenter
+  const q = encodeURIComponent(`apartamento aluguel ${bairro} São Paulo`);
+  const url = `https://www.olx.com.br/api/relevance/v2/search?q=${q}&sc=1020&o=1&utype=all&sf=1&sp=1&re=11&ps=0&pe=0&ls=0&le=0&fq=1`;
+  try {
+    const res = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Referer': 'https://www.olx.com.br/',
+        'Origin': 'https://www.olx.com.br',
+      },
+      timeout: 30000,
+    });
+    const listings = res.data?.listing?.results || res.data?.results || [];
+    return listings
+      .filter(i => i.price && i.subject && i.url)
+      .map(i => {
+        const preco = parseInt((i.price || '').replace(/\D/g, '')) || 0;
+        return {
+          titulo: i.subject || `Imóvel - ${bairro}`,
+          preco,
+          bairro,
+          tipo: 'residencial',
+          portal: 'OLX',
+          link: (i.url || '').split('?')[0],
+        };
+      })
+      .filter(i => i.preco > 0 && i.link.length > 20);
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
 // ── FUNÇÃO PRINCIPAL: todas as fontes em paralelo ─────────────
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imóveis: ${bairro}`);
@@ -890,9 +935,10 @@ async function buscarOLX(bairro, region) {
     buscarVivaReal(bairro),
     buscarMercadoLivre(bairro),
     buscarImovelWeb(bairro),
+    buscarOLXAPI(bairro),
   ]);
 
-  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb'];
+  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb', 'OLX'];
   const todos = [];
 
   resultados.forEach((r, i) => {
