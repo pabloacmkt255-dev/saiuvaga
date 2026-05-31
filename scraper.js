@@ -725,12 +725,13 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
     }
   }
 
-  // Tenta BrightData (proxy HTTP residencial)
+  // Tenta BrightData (proxy HTTP residencial — usa HTTP para não ser bloqueado pelo Railway)
   if (brightDataKey) {
     try {
-      const { HttpsProxyAgent } = require('https-proxy-agent');
-      const proxyAgent = new HttpsProxyAgent(`https://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:33335`);
-      const res = await axios.get(url, { headers, timeout, httpsAgent: proxyAgent, httpAgent: proxyAgent });
+      const { HttpProxyAgent } = require('http-proxy-agent');
+      // Porta 22225 via HTTP — Railway não bloqueia saída HTTP para esse host
+      const proxyAgent = new HttpProxyAgent(`http://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:22225`);
+      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
       return res;
     } catch (e) {
       console.log(`   ↩️ BrightData falhou (${e.message.slice(0,40)}), tentando direto...`);
@@ -941,18 +942,7 @@ async function rodarScraper() {
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
-// ── Manter Evolution API acordada ───────────────────────────
-cron.schedule('*/10 * * * *', async () => {
-  try {
-    await axios.get(`${EVOLUTION_URL}/instance/fetchInstances`, {
-      headers: { 'apikey': EVOLUTION_KEY },
-      timeout: 5000,
-    });
-    console.log('   💓 Evolution API ping OK');
-  } catch (err) {
-    console.log('   💤 Evolution API ping falhou:', err.message);
-  }
-});
+// (Evolution API removida — usando Baileys direto)
 
 cron.schedule('*/5 * * * *', rodarScraper);
 rodarScraper();
