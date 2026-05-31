@@ -933,12 +933,9 @@ async function buscarOLX(bairro, region) {
   const resultados = await Promise.allSettled([
     buscarZap(bairro),
     buscarVivaReal(bairro),
-    buscarMercadoLivre(bairro),
-    buscarImovelWeb(bairro),
-    buscarOLXAPI(bairro),
   ]);
 
-  const fontes = ['ZAP', 'VivaReal', 'MercadoLivre', 'ImovelWeb', 'OLX'];
+  const fontes = ['ZAP', 'VivaReal'];
   const todos = [];
 
   resultados.forEach((r, i) => {
@@ -1030,5 +1027,5 @@ async function rodarScraper() {
 
 // (Evolution API removida — usando Baileys direto)
 
-cron.schedule('*/5 * * * *', rodarScraper);
+cron.schedule('*/15 * * * *', rodarScraper); // 15min para preservar créditos ScraperAPI
 rodarScraper();
