@@ -25,6 +25,7 @@ const path = require('path');
 const fs = require('fs');
 
 let waSocket = null;
+let reconnectCount = 0;
 let waReady = false;
 let waQRCode = null;
 const AUTH_PATH = path.join('/tmp', 'baileys_auth');
@@ -88,7 +89,13 @@ async function iniciarBaileys() {
     version,
     auth: state,
     logger: pino({ level: 'silent' }),
-    browser: ['SaiuVaga', 'Chrome', '124.0'],
+    browser: ['Ubuntu', 'Chrome', '124.0.0.0'],
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    fireInitQueries: false,
+    generateHighQualityLinkPreview: false,
+    shouldIgnoreJid: jid => jid.endsWith('@broadcast'),
+    getMessage: async () => ({ conversation: '' }),
   });
 
   // Debounce para não salvar no Supabase a cada creds.update (pode disparar muitas vezes)
@@ -120,7 +127,14 @@ async function iniciarBaileys() {
         ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
         : true;
       console.log('⚠️ WhatsApp desconectado. Reconectando:', shouldReconnect);
-      if (shouldReconnect) setTimeout(iniciarBaileys, 5000);
+      if (shouldReconnect) {
+        const delay = Math.min(30000, (reconnectCount || 1) * 5000);
+        reconnectCount = (reconnectCount || 0) + 1;
+        console.log(`⏳ Reconectando em ${delay/1000}s (tentativa ${reconnectCount})...`);
+        setTimeout(iniciarBaileys, delay);
+      } else {
+        reconnectCount = 0;
+      }
     }
   });
 
