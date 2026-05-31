@@ -640,73 +640,13 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// ── Rota para criar instância Evolution API ──────────────────
-app.post('/api/evolution/criar-instancia', async (req, res) => {
-  try {
-    const result = await axios.post(
-      `${EVOLUTION_URL}/instance/create`,
-      {
-        instanceName: EVOLUTION_INSTANCE,
-        qrcode: true,
-        integration: 'WHATSAPP-BAILEYS',
-      },
-      {
-        headers: {
-          'apikey': EVOLUTION_KEY,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    res.json(result.data);
-  } catch (err) {
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Rota para obter QR Code ──────────────────────────────────
-app.get('/api/evolution/qrcode', async (req, res) => {
-  try {
-    const result = await axios.get(
-      `${EVOLUTION_URL}/instance/connect/${EVOLUTION_INSTANCE}`,
-      {
-        headers: { 'apikey': EVOLUTION_KEY },
-      }
-    );
-    res.json(result.data);
-  } catch (err) {
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Rota para status da instância ───────────────────────────
-app.get('/api/evolution/status', async (req, res) => {
-  try {
-    const result = await axios.get(
-      `${EVOLUTION_URL}/instance/fetchInstances`,
-      {
-        headers: { 'apikey': EVOLUTION_KEY },
-      }
-    );
-    res.json(result.data);
-  } catch (err) {
-    res.status(500).json({ erro: err.message });
-  }
-});
+// (rotas Evolution API removidas)
 
 // ─────────────────────────────────────────────────────────────
 // SCRAPER MODULAR — ZAP + VivaReal + MercadoLivre + ImovelWeb
 // Todas as fontes rodam em paralelo com fallback automático
 // Usa ScraperAPI como proxy rotativo residencial para bypassar 403
 // ─────────────────────────────────────────────────────────────
-
-// ── Helper ScraperAPI ─────────────────────────────────────────
-// Envolve qualquer URL com o proxy da ScraperAPI (IPs residenciais)
-// Fallback automático: se SCRAPERAPI_KEY não estiver definida, faz requisição direta
-function scraperApiUrl(targetUrl) {
-  const key = process.env.SCRAPERAPI_KEY;
-  if (!key) return targetUrl; // sem proxy se não tiver key
-  return `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(targetUrl)}`;
-}
 
 // Faz request com fallback automático entre proxies:
 // 1. ScraperAPI → 2. Scrape.do → 3. BrightData → 4. Direto
@@ -854,88 +794,6 @@ async function buscarImovelWeb(bairro) {
   return imoveis;
 }
 
-// ── SOURCE 5: QuintoAndar (API interna pública, funciona sem proxy) ──
-const COORDS_BAIRROS = {
-  'Pinheiros':     ['-23.566', '-46.683'],
-  'Vila Madalena': ['-23.556', '-46.691'],
-  'Faria Lima':    ['-23.578', '-46.679'],
-  'Moema':         ['-23.601', '-46.664'],
-  'Itaim Bibi':    ['-23.585', '-46.676'],
-};
-
-async function buscarQuintoAndar(bairro) {
-  const coords = COORDS_BAIRROS[bairro];
-  if (!coords) return [];
-  const url = `https://www.quintoandar.com.br/api/yellow-pages/search?q=(and tipo:'Apartamento'(and (and for_rent:'true')))&fq=local:['${coords[0]}','${coords[1]}']&return=id,local,aluguel,area,quartos,custo,endereco,regiao_nome,tipo&size=50&q.parser=structured`;
-  try {
-    const res = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Referer': 'https://www.quintoandar.com.br/',
-      },
-      timeout: 30000,
-    });
-    return (res.data?.hits?.hit || [])
-      .filter(i => i.fields?.custo)
-      .map(i => ({
-        titulo: `Apartamento ${i.fields.quartos || '?'} quartos - ${i.fields.regiao_nome || bairro}`,
-        preco: parseInt(i.fields.custo) || parseInt(i.fields.aluguel) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'QuintoAndar',
-        link: `https://www.quintoandar.com.br/imovel/${i.id}`,
-      }))
-      .filter(i => i.preco > 0);
-  } catch (e) {
-    throw new Error(e.message);
-  }
-}
-
-
-// ── SOURCE: OLX (API interna — funciona direto sem proxy) ──────
-const OLX_REGIOES = {
-  'Pinheiros':     { location_id: 1001072, neighborhood: 'pinheiros' },
-  'Vila Madalena': { location_id: 1001072, neighborhood: 'vila-madalena' },
-  'Faria Lima':    { location_id: 1001072, neighborhood: 'itaim-bibi' },
-  'Moema':         { location_id: 1001072, neighborhood: 'moema' },
-  'Itaim Bibi':    { location_id: 1001072, neighborhood: 'itaim-bibi' },
-};
-
-async function buscarOLXAPI(bairro) {
-  // OLX API de busca — retorna JSON sem bloqueio de datacenter
-  const q = encodeURIComponent(`apartamento aluguel ${bairro} São Paulo`);
-  const url = `https://www.olx.com.br/api/relevance/v2/search?q=${q}&sc=1020&o=1&utype=all&sf=1&sp=1&re=11&ps=0&pe=0&ls=0&le=0&fq=1`;
-  try {
-    const res = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Referer': 'https://www.olx.com.br/',
-        'Origin': 'https://www.olx.com.br',
-      },
-      timeout: 30000,
-    });
-    const listings = res.data?.listing?.results || res.data?.results || [];
-    return listings
-      .filter(i => i.price && i.subject && i.url)
-      .map(i => {
-        const preco = parseInt((i.price || '').replace(/\D/g, '')) || 0;
-        return {
-          titulo: i.subject || `Imóvel - ${bairro}`,
-          preco,
-          bairro,
-          tipo: 'residencial',
-          portal: 'OLX',
-          link: (i.url || '').split('?')[0],
-        };
-      })
-      .filter(i => i.preco > 0 && i.link.length > 20);
-  } catch (e) {
-    throw new Error(e.message);
-  }
-}
 
 // ── FUNÇÃO PRINCIPAL: todas as fontes em paralelo ─────────────
 async function buscarOLX(bairro, region) {
