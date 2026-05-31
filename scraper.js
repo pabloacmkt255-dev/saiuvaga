@@ -764,13 +764,27 @@ function toSlug(str) {
 async function buscarZap(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axiosProxy(url, {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'application/json',
-    'x-domain': 'www.zapimoveis.com.br',
-    'Origin': 'https://www.zapimoveis.com.br',
-    'Referer': 'https://www.zapimoveis.com.br/',
-  }, 45000);
+  // ZAP funciona direto — tenta sem proxy primeiro, proxy como fallback
+  let data;
+  try {
+    const res = await axios.get(url, { headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'x-domain': 'www.zapimoveis.com.br',
+      'Origin': 'https://www.zapimoveis.com.br',
+      'Referer': 'https://www.zapimoveis.com.br/',
+    }, timeout: 30000 });
+    data = res.data;
+  } catch (e) {
+    const res = await axiosProxy(url, {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'x-domain': 'www.zapimoveis.com.br',
+      'Origin': 'https://www.zapimoveis.com.br',
+      'Referer': 'https://www.zapimoveis.com.br/',
+    }, 45000);
+    data = res.data;
+  }
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -786,13 +800,27 @@ async function buscarZap(bairro) {
 async function buscarVivaReal(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axiosProxy(url, {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'application/json',
-    'x-domain': 'www.vivareal.com.br',
-    'Origin': 'https://www.vivareal.com.br',
-    'Referer': 'https://www.vivareal.com.br/',
-  }, 45000);
+  // VivaReal — mesma infra do ZAP, tenta direto primeiro
+  let data;
+  try {
+    const res = await axios.get(url, { headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'x-domain': 'www.vivareal.com.br',
+      'Origin': 'https://www.vivareal.com.br',
+      'Referer': 'https://www.vivareal.com.br/',
+    }, timeout: 30000 });
+    data = res.data;
+  } catch (e) {
+    const res = await axiosProxy(url, {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'x-domain': 'www.vivareal.com.br',
+      'Origin': 'https://www.vivareal.com.br',
+      'Referer': 'https://www.vivareal.com.br/',
+    }, 45000);
+    data = res.data;
+  }
   return (data?.search?.result?.listings || [])
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
     .map(i => ({
@@ -808,7 +836,8 @@ async function buscarVivaReal(bairro) {
 async function buscarMercadoLivre(bairro) {
   // ML tem API pública oficial — proxy ajuda a evitar rate limit por IP de datacenter
   const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
-  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 45000);
+  // MercadoLivre tem API oficial pública — vai direto
+  const { data } = await axios.get(url, { headers: { 'Accept': 'application/json' }, timeout: 30000 });
   return (data?.results || [])
     .filter(i => i.price && i.title && i.permalink)
     .map(i => ({
@@ -824,9 +853,10 @@ async function buscarMercadoLivre(bairro) {
 async function buscarImovelWeb(bairro) {
   const slug = toSlug(bairro);
   const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
-  const { data: xml } = await axiosProxy(url, {
+  // ImovelWeb RSS público — vai direto
+  const { data: xml } = await axios.get(url, { headers: {
     'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml',
-  }, 45000);
+  }, timeout: 30000 });
   const $ = cheerio.load(xml, { xmlMode: true });
   const imoveis = [];
   $('item').each((_, el) => {
