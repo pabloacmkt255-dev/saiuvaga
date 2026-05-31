@@ -187,6 +187,13 @@ app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅', whatsapp: w
 // ── Rota Reset WhatsApp (força novo QR) ─────────────────────
 app.get('/reset-whatsapp', async (req, res) => {
   try {
+    // Força desconexão e reset completo
+    waReady = false;
+    waQRCode = null;
+    if (waSocket) {
+      try { waSocket.end(); } catch(e) {}
+      waSocket = null;
+    }
     // Apaga sessão local
     if (fs.existsSync(AUTH_PATH)) {
       fs.rmSync(AUTH_PATH, { recursive: true, force: true });
@@ -195,14 +202,9 @@ app.get('/reset-whatsapp', async (req, res) => {
     // Apaga sessão no Supabase
     await supabase.storage.from(SUPABASE_BUCKET).remove([SUPABASE_SESSION_FILE]);
     console.log('🗑️ Sessão Supabase apagada');
-    // Desconecta socket atual
-    if (waSocket) {
-      waReady = false;
-      waSocket = null;
-    }
     // Reinicia Baileys após 2s
     setTimeout(iniciarBaileys, 2000);
-    res.send('<h2>✅ Sessão apagada! <a href="/qr">Clique aqui para escanear novo QR</a></h2><script>setTimeout(()=>location.href="/qr",3000)</script>');
+    res.send('<h2>✅ Sessão apagada! Aguarde o QR...</h2><script>setTimeout(()=>location.href="/qr",4000)</script>');
   } catch (err) {
     res.status(500).send('Erro: ' + err.message);
   }
