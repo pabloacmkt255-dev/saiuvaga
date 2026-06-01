@@ -672,7 +672,7 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   // Tenta ScraperAPI (modo simples — sem render, mais rápido e econômico)
   if (scraperApiKey) {
     try {
-      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&premium=true&country_code=br&keep_headers=true`;
+      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&country_code=br&keep_headers=true`;
       const res = await axios.get(proxyUrl, { headers, timeout });
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
