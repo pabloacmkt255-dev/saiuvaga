@@ -1,4 +1,4 @@
-// scraper.js — SaiuVaga (Supabase + Evolution API + Mercado Pago)
+// scraper.js — SaiuVaga (Cloud API WhatsApp + Supabase + Mercado Pago)
 require('dotenv').config();
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -17,239 +17,11 @@ const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
-// ── WhatsApp via Baileys (direto, sem Evolution API) ─────────
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const pino = require('pino');
-const path = require('path');
-const fs = require('fs');
+// ── WhatsApp Cloud API ───────────────────────────────────────
+const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
+const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
-let waSocket = null;
-let reconnectCount = 0;
-let waReady = false;
-let waQRCode = null;
-const AUTH_PATH = path.join('/tmp', 'baileys_auth');
-const SUPABASE_BUCKET = 'baileys-session';
-const SUPABASE_SESSION_FILE = 'creds.json';
-
-// ── Salva sessão Baileys no Supabase Storage ─────────────────
-async function salvarSessaoSupabase() {
-  try {
-    const credsPath = path.join(AUTH_PATH, 'creds.json');
-    if (!fs.existsSync(credsPath)) return;
-    const conteudo = fs.readFileSync(credsPath);
-    const { error } = await supabase.storage
-      .from(SUPABASE_BUCKET)
-      .upload(SUPABASE_SESSION_FILE, conteudo, { upsert: true, contentType: 'application/json' });
-    if (error) console.log('   ⚠️ Erro ao salvar sessão no Supabase:', error.message);
-    else console.log('   💾 Sessão WhatsApp salva no Supabase!');
-  } catch (err) {
-    console.log('   ⚠️ salvarSessaoSupabase:', err.message);
-  }
-}
-
-// ── Restaura sessão Baileys do Supabase Storage ──────────────
-async function restaurarSessaoSupabase() {
-  try {
-    if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
-    const { data, error } = await supabase.storage
-      .from(SUPABASE_BUCKET)
-      .download(SUPABASE_SESSION_FILE);
-    if (error || !data) {
-      console.log('   ℹ️ Nenhuma sessão salva encontrada — aguardando QR code.');
-      return false;
-    }
-    const buffer = Buffer.from(await data.arrayBuffer());
-    fs.writeFileSync(path.join(AUTH_PATH, 'creds.json'), buffer);
-    console.log('   ✅ Sessão WhatsApp restaurada do Supabase!');
-    return true;
-  } catch (err) {
-    console.log('   ⚠️ restaurarSessaoSupabase:', err.message);
-    return false;
-  }
-}
-
-async function iniciarBaileys() {
-  if (!fs.existsSync(AUTH_PATH)) fs.mkdirSync(AUTH_PATH, { recursive: true });
-
-  // Tenta restaurar sessão salva antes de pedir QR
-  // Se RESET_SESSION=true, ignora sessão salva e força novo QR
-  if (process.env.RESET_SESSION !== 'true') {
-    await restaurarSessaoSupabase();
-  } else {
-    console.log('🔄 RESET_SESSION=true — ignorando sessão salva, aguardando novo QR');
-    // Apaga sessão do Supabase também
-    await supabase.storage.from(SUPABASE_BUCKET).remove([SUPABASE_SESSION_FILE]).catch(() => {});
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_PATH);
-  const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    browser: ['Ubuntu', 'Chrome', '124.0.0.0'],
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-    fireInitQueries: false,
-    generateHighQualityLinkPreview: false,
-    shouldIgnoreJid: jid => jid.endsWith('@broadcast'),
-    getMessage: async () => ({ conversation: '' }),
-  });
-
-  // Debounce para não salvar no Supabase a cada creds.update (pode disparar muitas vezes)
-  let credsUpdateTimer = null;
-  sock.ev.on('creds.update', () => {
-    saveCreds();
-    if (credsUpdateTimer) clearTimeout(credsUpdateTimer);
-    credsUpdateTimer = setTimeout(() => {
-      salvarSessaoSupabase().catch(e => console.log('⚠️ creds.update save:', e.message));
-    }, 3000); // espera 3s estabilizar antes de salvar
-  });
-
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      waQRCode = qr;
-      console.log('\n📱 QR DISPONÍVEL EM: https://saiuvaga-production.up.railway.app/qr\n');
-    }
-    if (connection === 'open') {
-      console.log('✅ WhatsApp conectado via Baileys! connection=open');
-      waReady = true;
-      waQRCode = null;
-      waSocket = sock;
-      // Salva sessão no Supabase para sobreviver a restarts
-      await salvarSessaoSupabase();
-    }
-    if (connection === 'close') {
-      waReady = false;
-      const shouldReconnect = (lastDisconnect?.error instanceof Boom)
-        ? lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut
-        : true;
-      console.log('⚠️ WhatsApp desconectado. Reconectando:', shouldReconnect);
-      if (shouldReconnect) {
-        const delay = Math.min(30000, (reconnectCount || 1) * 5000);
-        reconnectCount = (reconnectCount || 0) + 1;
-        console.log(`⏳ Reconectando em ${delay/1000}s (tentativa ${reconnectCount})...`);
-        setTimeout(iniciarBaileys, delay);
-      } else {
-        reconnectCount = 0;
-      }
-    }
-  });
-
-  // Recebe mensagens e encaminha para o chatbot
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log(`📨 messages.upsert type=${type} count=${messages.length}`);
-    if (type !== 'notify') return;
-    for (const msg of messages) {
-      console.log(`   📨 msg jid=${msg.key.remoteJid} fromMe=${msg.key.fromMe}`);
-      if (msg.key.fromMe) continue;
-      if (msg.key.remoteJid.includes('@g.us')) continue;
-      // Aceita @s.whatsapp.net, @c.us e @lid (novo formato do WhatsApp)
-      const isValidJid = msg.key.remoteJid.includes('@s.whatsapp.net') ||
-                         msg.key.remoteJid.includes('@c.us') ||
-                         msg.key.remoteJid.includes('@lid');
-      if (!isValidJid) continue;
-
-      const remoteJid = msg.key.remoteJid; // JID original para responder
-      const phone = remoteJid
-        .replace('@s.whatsapp.net', '')
-        .replace('@c.us', '')
-        .replace('@lid', '')
-        .split(':')[0];
-      const text = (
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        msg.message?.imageMessage?.caption ||
-        msg.message?.buttonsResponseMessage?.selectedDisplayText ||
-        msg.message?.listResponseMessage?.title || ''
-      ).trim();
-
-      if (!phone || !text) {
-        console.log(`   ⚠️ Mensagem sem texto ou phone inválido — jid=${remoteJid}`);
-        continue;
-      }
-      console.log(`\n💬 WhatsApp de ${phone} (jid=${remoteJid}): "${text}"`);
-      await processarMensagem(remoteJid, text); // usa JID original para responder
-    }
-  });
-}
-
-// Inicia Baileys ao subir o servidor
-iniciarBaileys().catch(console.error);
-
-// ── Servidor Express ────────────────────────────────────────
-const app = express();
-app.use(express.json());
-
-// ── CORS ────────────────────────────────────────────────────
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
-
-// ── Rota de saúde ───────────────────────────────────────────
-app.get('/', (req, res) => res.json({ status: 'SaiuVaga online ✅', whatsapp: waReady ? 'conectado' : 'aguardando QR' }));
-
-// ── Rota Reset WhatsApp (força novo QR) ─────────────────────
-app.get('/reset-whatsapp', async (req, res) => {
-  try {
-    // Força desconexão e reset completo
-    waReady = false;
-    waQRCode = null;
-    if (waSocket) {
-      try { waSocket.end(); } catch(e) {}
-      waSocket = null;
-    }
-    // Apaga sessão local
-    if (fs.existsSync(AUTH_PATH)) {
-      fs.rmSync(AUTH_PATH, { recursive: true, force: true });
-      console.log('🗑️ Sessão local apagada');
-    }
-    // Apaga sessão no Supabase
-    await supabase.storage.from(SUPABASE_BUCKET).remove([SUPABASE_SESSION_FILE]);
-    console.log('🗑️ Sessão Supabase apagada');
-    // Reinicia Baileys após 2s
-    setTimeout(iniciarBaileys, 2000);
-    res.send('<h2>✅ Sessão apagada! Aguarde o QR...</h2><script>setTimeout(()=>location.href="/qr",4000)</script>');
-  } catch (err) {
-    res.status(500).send('Erro: ' + err.message);
-  }
-});
-
-// ── Rota QR Code WhatsApp ────────────────────────────────────
-app.get('/qr', async (req, res) => {
-  if (waReady) return res.send('<h2>✅ WhatsApp já está conectado!</h2>');
-  if (!waQRCode) return res.send('<h2>⏳ Aguardando QR code... recarregue em 5 segundos.</h2><script>setTimeout(()=>location.reload(),5000)</script>');
-
-  try {
-    const QRCode = require('qrcode');
-    const qrImage = await QRCode.toDataURL(waQRCode);
-    res.send(`
-      <!DOCTYPE html><html><head><title>SaiuVaga — Conectar WhatsApp</title>
-      <meta http-equiv="refresh" content="30">
-      <style>body{font-family:sans-serif;text-align:center;padding:40px;background:#111;color:#fff}
-      img{width:300px;border:4px solid #25d366;border-radius:12px;padding:10px;background:#fff}</style></head>
-      <body>
-        <h2>📱 Escaneie com o WhatsApp</h2>
-        <p>Abra o WhatsApp → Configurações → Aparelhos vinculados → Vincular aparelho</p>
-        <img src="${qrImage}" alt="QR Code"/>
-        <p><small>Esta página recarrega automaticamente a cada 30s</small></p>
-      </body></html>
-    `);
-  } catch (err) {
-    res.status(500).send('Erro ao gerar QR: ' + err.message);
-  }
-});
-
-// ── Função WhatsApp unificada (Baileys direto) ───────────────
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   const mensagem = mensagemLivre || (
     `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
@@ -260,311 +32,96 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
     `_Responda PARAR para cancelar alertas_`
   );
 
-  // Se já é um JID completo (contém @), usa direto; senão monta o JID
-  const jid = telefone.includes('@')
-    ? telefone
-    : (telefone.replace(/\D/g, '').startsWith('55') ? telefone.replace(/\D/g, '') : `55${telefone.replace(/\D/g, '')}`) + '@s.whatsapp.net';
-  console.log(`   📲 Enviando para JID: ${jid}`);
-
-  if (!waReady || !waSocket) {
-    console.log(`   ⚠️ WhatsApp não conectado ainda — mensagem não enviada para ${telefone}`);
-    return false;
-  }
+  // Normaliza número: remove tudo que não é dígito, garante 55 na frente
+  let phone = telefone.replace(/\D/g, '');
+  if (!phone.startsWith('55')) phone = '55' + phone;
 
   try {
-    await waSocket.sendMessage(jid, { text: mensagem });
-    console.log(`   📲 WhatsApp enviado para ${telefone}`);
+    const res = await axios.post(
+      `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_ID}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: phone,
+        type: 'text',
+        text: { preview_url: false, body: mensagem }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.messages?.[0]?.id}`);
     return true;
   } catch (err) {
-    console.error(`   ✗ Erro Baileys: ${err.message}`);
+    const detail = err.response?.data?.error?.message || err.message;
+    console.error(`   ✗ Erro Cloud API: ${detail}`);
     return false;
   }
 }
 
-// ── Ativar trial de 7 dias ──────────────────────────────────
-app.post('/api/trial/ativar', async (req, res) => {
-  try {
-    const { user_id, email } = req.body;
-    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+// ── Servidor Express ────────────────────────────────────────
+const app = express();
 
-    const query = user_id
-      ? supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('id', user_id).maybeSingle()
-      : supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('email', email).maybeSingle();
+// ── CORS ────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 
-    const { data: user } = await query;
+app.use(express.json());
 
-    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
-    if (user.trial_usado) return res.status(400).json({ erro: 'Trial já utilizado', ja_usou: true });
-    if (user.ativo) return res.status(400).json({ erro: 'Usuário já possui plano ativo' });
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 
-    const validade = new Date();
-    validade.setDate(validade.getDate() + 7);
+// ── Rota de saúde ───────────────────────────────────────────
+app.get('/', (req, res) => res.json({
+  status: 'SaiuVaga online ✅',
+  whatsapp: 'Cloud API ativa',
+  phone_id: WHATSAPP_PHONE_ID ? '✅ configurado' : '❌ faltando'
+}));
 
-    await supabase.from('users').update({
-      ativo: true,
-      trial_usado: true,
-      plano_validade: validade.toISOString(),
-      plano: 'trial',
-    }).eq('id', user.id);
-
-    console.log(`   🎁 Trial ativado para ${email || user_id} até ${validade.toLocaleDateString('pt-BR')}`);
-
-    res.json({
-      ok: true,
-      mensagem: 'Trial de 7 dias ativado!',
-      validade: validade.toISOString(),
-      dias: 7,
-    });
-
-  } catch (err) {
-    console.error('❌ Erro trial:', err.message);
-    res.status(500).json({ erro: err.message });
+// ── Webhook Meta — verificação ──────────────────────────────
+app.get('/webhook', (req, res) => {
+  const mode      = req.query['hub.mode'];
+  const token     = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
+    console.log('✅ Webhook Meta verificado!');
+    res.status(200).send(challenge);
+  } else {
+    console.log('❌ Webhook verificação falhou');
+    res.sendStatus(403);
   }
 });
 
-// ── Verificar status do usuário ─────────────────────────────
-app.get('/api/usuario/status', async (req, res) => {
+// ── Webhook Meta — receber mensagens ────────────────────────
+app.post('/webhook', async (req, res) => {
+  res.sendStatus(200); // responde IMEDIATAMENTE (Meta exige < 5s)
   try {
-    const { user_id, email } = req.query;
-    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
-
-    const query = user_id
-      ? supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('id', user_id).maybeSingle()
-      : supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('email', email).maybeSingle();
-
-    const { data: user } = await query;
-    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
-
-    const agora = new Date();
-    const validade = user.plano_validade ? new Date(user.plano_validade) : null;
-    const ativo = user.ativo && validade && validade > agora;
-
-    if (user.ativo && validade && validade <= agora) {
-      await supabase.from('users').update({ ativo: false }).eq('id', user.id);
+    const entry   = req.body?.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value   = changes?.value;
+    if (!value?.messages) return;
+    for (const msg of value.messages) {
+      if (msg.type !== 'text') continue;
+      const from = msg.from; // número com código do país ex: 5511999999999
+      const body = msg.text?.body || '';
+      if (!from || !body) continue;
+      console.log(`\n💬 WhatsApp de ${from}: "${body}"`);
+      await processarMensagem(from, body);
     }
-
-    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
-
-    res.json({
-      ativo,
-      plano: user.plano,
-      trial_usado: user.trial_usado,
-      validade: user.plano_validade,
-      dias_restantes: diasRestantes,
-      em_trial: user.plano === 'trial' && ativo,
-    });
-
-  } catch (err) {
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Gerar Pix ───────────────────────────────────────────────
-app.post('/api/pagamento/pix', async (req, res) => {
-  try {
-    const { email, nome, cpf, plano = 'mensal' } = req.body;
-
-    if (!email || !nome || !cpf) {
-      return res.status(400).json({ erro: 'email, nome e cpf são obrigatórios' });
-    }
-
-    const valores = { mensal: 19.90, trimestral: 38.00 };
-    const valor = valores[plano] || 19.90;
-
-    const payment = new Payment(mp);
-    const result = await payment.create({
-      body: {
-        transaction_amount: valor,
-        description: `SaiuVaga — Plano ${plano}`,
-        payment_method_id: 'pix',
-        payer: {
-          email,
-          first_name: nome.split(' ')[0],
-          last_name: nome.split(' ').slice(1).join(' ') || '-',
-          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
-        },
-      },
-    });
-
-    const pix = result.point_of_interaction?.transaction_data;
-
-    res.json({
-      id: result.id,
-      status: result.status,
-      qr_code: pix?.qr_code,
-      qr_code_base64: pix?.qr_code_base64,
-      copia_cola: pix?.qr_code,
-      expiracao: pix?.ticket_url,
-      valor,
-      plano,
-    });
-
-  } catch (err) {
-    console.error('❌ Erro Pix:', err.message);
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Gerar Boleto ────────────────────────────────────────────
-app.post('/api/pagamento/boleto', async (req, res) => {
-  try {
-    const { email, nome, cpf, cep, plano = 'mensal' } = req.body;
-
-    if (!email || !nome || !cpf || !cep) {
-      return res.status(400).json({ erro: 'email, nome, cpf e cep são obrigatórios' });
-    }
-
-    const valores = { mensal: 19.90, trimestral: 38.00 };
-    const valor = valores[plano] || 19.90;
-
-    const payment = new Payment(mp);
-    const result = await payment.create({
-      body: {
-        transaction_amount: valor,
-        description: `SaiuVaga — Plano ${plano}`,
-        payment_method_id: 'bolbradesco',
-        payer: {
-          email,
-          first_name: nome.split(' ')[0],
-          last_name: nome.split(' ').slice(1).join(' ') || '-',
-          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
-          address: { zip_code: cep.replace(/\D/g, '') },
-        },
-      },
-    });
-
-    res.json({
-      id: result.id,
-      status: result.status,
-      boleto_url: result.transaction_details?.external_resource_url,
-      codigo_barras: result.barcode?.content,
-      data_vencimento: result.date_of_expiration,
-      valor,
-      plano,
-    });
-
-  } catch (err) {
-    console.error('❌ Erro Boleto:', err.message);
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Gerar Cartão de Crédito (Checkout Pro) ──────────────────
-app.post('/api/pagamento/cartao', async (req, res) => {
-  try {
-    const { email, nome, plano = 'mensal', user_id } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ erro: 'email é obrigatório' });
-    }
-
-    const valores = { mensal: 19.90, trimestral: 38.00 };
-    const valor = valores[plano] || 19.90;
-
-    const preference = new Preference(mp);
-    const result = await preference.create({
-      body: {
-        items: [{
-          title: `SaiuVaga — Plano ${plano}`,
-          quantity: 1,
-          unit_price: valor,
-          currency_id: 'BRL',
-        }],
-        payer: { email, name: nome },
-        back_urls: {
-          success: 'https://saiuvaga.com.br/sucesso.html',
-          failure: 'https://saiuvaga.com.br/erro.html',
-          pending: 'https://saiuvaga.com.br/pendente.html',
-        },
-        auto_return: 'approved',
-        external_reference: user_id || email,
-        notification_url: 'https://saiuvaga-production.up.railway.app/api/webhook/mp',
-      },
-    });
-
-    res.json({
-      preference_id: result.id,
-      checkout_url: result.init_point,
-      sandbox_url: result.sandbox_init_point,
-      valor,
-      plano,
-    });
-
-  } catch (err) {
-    console.error('❌ Erro Cartão:', err.message);
-    res.status(500).json({ erro: err.message });
-  }
-});
-
-// ── Webhook Mercado Pago ────────────────────────────────────
-app.post('/api/webhook/mp', async (req, res) => {
-  res.sendStatus(200);
-
-  try {
-    const { type, data } = req.body;
-    console.log(`\n📩 Webhook MP: type=${type} id=${data?.id}`);
-
-    if (type !== 'payment' || !data?.id) return;
-
-    const payment = new Payment(mp);
-    const pag = await payment.get({ id: data.id });
-
-    console.log(`   Status: ${pag.status} | Valor: R$${pag.transaction_amount} | Email: ${pag.payer?.email}`);
-
-    if (pag.status !== 'approved') return;
-
-    const email = pag.payer?.email;
-    if (!email) return;
-
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, whatsapp, nome')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (!user) {
-      console.log(`   ⚠️  Usuário não encontrado para ${email}`);
-      return;
-    }
-
-    const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
-    const validade = new Date();
-    validade.setDate(validade.getDate() + diasPlano);
-
-    await supabase
-      .from('users')
-      .update({
-        ativo: true,
-        plano_validade: validade.toISOString(),
-        ultimo_pagamento: new Date().toISOString(),
-        mp_payment_id: String(pag.id),
-      })
-      .eq('id', user.id);
-
-    console.log(`   ✅ Usuário ${email} ativado por ${diasPlano} dias`);
-
-    if (user.whatsapp) {
-      await enviarWhatsApp(
-        user.whatsapp,
-        null,
-        `✅ *Pagamento confirmado!*\n\n` +
-        `Olá ${user.nome || ''}! Seu acesso ao SaiuVaga foi ativado.\n` +
-        `📅 Válido por ${diasPlano} dias.\n\n` +
-        `Você receberá alertas de imóveis assim que houver novidades! 🏠`
-      );
-    }
-
   } catch (err) {
     console.error('❌ Erro webhook:', err.message);
   }
 });
 
-// ── Webhook WhatsApp (Evolution API) ────────────────────────
-app.get('/api/whatsapp/webhook', (req, res) => {
-  res.json({ ok: true, status: 'SaiuVaga Chatbot ativo ✅' });
-});
-
-// ── Função de processar mensagem (usada pelo Baileys e webhook) ─
+// ── Função de processar mensagem (chatbot Groq) ──────────────
 async function processarMensagem(phone, text) {
   try {
     const numero = phone.replace(/\D/g, '').replace(/^55/, '');
@@ -621,25 +178,23 @@ ${text}
 
 Responda como assistente do SaiuVaga:`;
 
-    const resposta = await fetch(
-      `https://api.groq.com/openai/v1/chat/completions`,
+    const resposta = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        method: 'POST',
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300,
+        temperature: 0.7,
+      },
+      {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 300,
-          temperature: 0.7,
-        }),
+        }
       }
     );
 
-    const data = await resposta.json();
-    const mensagem = data.choices?.[0]?.message?.content;
+    const mensagem = resposta.data?.choices?.[0]?.message?.content;
     if (!mensagem) return;
 
     await enviarWhatsApp(phone, null, mensagem);
@@ -649,27 +204,264 @@ Responda como assistente do SaiuVaga:`;
   }
 }
 
-// Webhook mantido para compatibilidade (não é mais necessário com Baileys)
-app.post('/api/whatsapp/webhook', async (req, res) => {
-  res.sendStatus(200);
+// ── Ativar trial de 7 dias ──────────────────────────────────
+app.post('/api/trial/ativar', async (req, res) => {
+  try {
+    const { user_id, email } = req.body;
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+
+    const query = user_id
+      ? supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('id', user_id).maybeSingle()
+      : supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('email', email).maybeSingle();
+
+    const { data: user } = await query;
+
+    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
+    if (user.trial_usado) return res.status(400).json({ erro: 'Trial já utilizado', ja_usou: true });
+    if (user.ativo) return res.status(400).json({ erro: 'Usuário já possui plano ativo' });
+
+    const validade = new Date();
+    validade.setDate(validade.getDate() + 7);
+
+    await supabase.from('users').update({
+      ativo: true,
+      trial_usado: true,
+      plano_validade: validade.toISOString(),
+      plano: 'trial',
+    }).eq('id', user.id);
+
+    console.log(`   🎁 Trial ativado para ${email || user_id} até ${validade.toLocaleDateString('pt-BR')}`);
+    res.json({ ok: true, mensagem: 'Trial de 7 dias ativado!', validade: validade.toISOString(), dias: 7 });
+
+  } catch (err) {
+    console.error('❌ Erro trial:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
 });
 
-// (rotas Evolution API removidas)
+// ── Verificar status do usuário ─────────────────────────────
+app.get('/api/usuario/status', async (req, res) => {
+  try {
+    const { user_id, email } = req.query;
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+
+    const query = user_id
+      ? supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('id', user_id).maybeSingle()
+      : supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('email', email).maybeSingle();
+
+    const { data: user } = await query;
+    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
+
+    const agora = new Date();
+    const validade = user.plano_validade ? new Date(user.plano_validade) : null;
+    const ativo = user.ativo && validade && validade > agora;
+
+    if (user.ativo && validade && validade <= agora) {
+      await supabase.from('users').update({ ativo: false }).eq('id', user.id);
+    }
+
+    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
+
+    res.json({
+      ativo,
+      plano: user.plano,
+      trial_usado: user.trial_usado,
+      validade: user.plano_validade,
+      dias_restantes: diasRestantes,
+      em_trial: user.plano === 'trial' && ativo,
+    });
+
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Gerar Pix ───────────────────────────────────────────────
+app.post('/api/pagamento/pix', async (req, res) => {
+  try {
+    const { email, nome, cpf, plano = 'mensal' } = req.body;
+    if (!email || !nome || !cpf) return res.status(400).json({ erro: 'email, nome e cpf são obrigatórios' });
+
+    const valores = { mensal: 19.90, trimestral: 38.00 };
+    const valor = valores[plano] || 19.90;
+
+    const payment = new Payment(mp);
+    const result = await payment.create({
+      body: {
+        transaction_amount: valor,
+        description: `SaiuVaga — Plano ${plano}`,
+        payment_method_id: 'pix',
+        payer: {
+          email,
+          first_name: nome.split(' ')[0],
+          last_name: nome.split(' ').slice(1).join(' ') || '-',
+          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
+        },
+      },
+    });
+
+    const pix = result.point_of_interaction?.transaction_data;
+    res.json({
+      id: result.id,
+      status: result.status,
+      qr_code: pix?.qr_code,
+      qr_code_base64: pix?.qr_code_base64,
+      copia_cola: pix?.qr_code,
+      expiracao: pix?.ticket_url,
+      valor, plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Pix:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Gerar Boleto ────────────────────────────────────────────
+app.post('/api/pagamento/boleto', async (req, res) => {
+  try {
+    const { email, nome, cpf, cep, plano = 'mensal' } = req.body;
+    if (!email || !nome || !cpf || !cep) return res.status(400).json({ erro: 'email, nome, cpf e cep são obrigatórios' });
+
+    const valores = { mensal: 19.90, trimestral: 38.00 };
+    const valor = valores[plano] || 19.90;
+
+    const payment = new Payment(mp);
+    const result = await payment.create({
+      body: {
+        transaction_amount: valor,
+        description: `SaiuVaga — Plano ${plano}`,
+        payment_method_id: 'bolbradesco',
+        payer: {
+          email,
+          first_name: nome.split(' ')[0],
+          last_name: nome.split(' ').slice(1).join(' ') || '-',
+          identification: { type: 'CPF', number: cpf.replace(/\D/g, '') },
+          address: { zip_code: cep.replace(/\D/g, '') },
+        },
+      },
+    });
+
+    res.json({
+      id: result.id,
+      status: result.status,
+      boleto_url: result.transaction_details?.external_resource_url,
+      valor, plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Boleto:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Gerar Cartão ────────────────────────────────────────────
+app.post('/api/pagamento/cartao', async (req, res) => {
+  try {
+    const { email, nome, user_id, plano = 'mensal' } = req.body;
+    if (!email || !nome) return res.status(400).json({ erro: 'email e nome são obrigatórios' });
+
+    const valores = { mensal: 19.90, trimestral: 38.00 };
+    const valor = valores[plano] || 19.90;
+
+    const preference = new Preference(mp);
+    const result = await preference.create({
+      body: {
+        items: [{
+          title: `SaiuVaga — Plano ${plano}`,
+          quantity: 1,
+          unit_price: valor,
+          currency_id: 'BRL',
+        }],
+        payer: { email, name: nome },
+        back_urls: {
+          success: 'https://saiuvaga.com.br/sucesso.html',
+          failure: 'https://saiuvaga.com.br/erro.html',
+          pending: 'https://saiuvaga.com.br/pendente.html',
+        },
+        auto_return: 'approved',
+        external_reference: user_id || email,
+        notification_url: 'https://saiuvaga-production.up.railway.app/api/webhook/mp',
+      },
+    });
+
+    res.json({
+      preference_id: result.id,
+      checkout_url: result.init_point,
+      sandbox_url: result.sandbox_init_point,
+      valor, plano,
+    });
+
+  } catch (err) {
+    console.error('❌ Erro Cartão:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+// ── Webhook Mercado Pago ────────────────────────────────────
+app.post('/api/webhook/mp', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const { type, data } = req.body;
+    console.log(`\n📩 Webhook MP: type=${type} id=${data?.id}`);
+    if (type !== 'payment' || !data?.id) return;
+
+    const payment = new Payment(mp);
+    const pag = await payment.get({ id: data.id });
+    console.log(`   Status: ${pag.status} | Valor: R$${pag.transaction_amount} | Email: ${pag.payer?.email}`);
+    if (pag.status !== 'approved') return;
+
+    const email = pag.payer?.email;
+    if (!email) return;
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, whatsapp, nome')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!user) { console.log(`   ⚠️  Usuário não encontrado para ${email}`); return; }
+
+    const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
+    const validade = new Date();
+    validade.setDate(validade.getDate() + diasPlano);
+
+    await supabase.from('users').update({
+      ativo: true,
+      plano_validade: validade.toISOString(),
+      ultimo_pagamento: new Date().toISOString(),
+      mp_payment_id: String(pag.id),
+    }).eq('id', user.id);
+
+    console.log(`   ✅ Usuário ${email} ativado por ${diasPlano} dias`);
+
+    if (user.whatsapp) {
+      await enviarWhatsApp(
+        user.whatsapp, null,
+        `✅ *Pagamento confirmado!*\n\n` +
+        `Olá ${user.nome || ''}! Seu acesso ao SaiuVaga foi ativado.\n` +
+        `📅 Válido por ${diasPlano} dias.\n\n` +
+        `Você receberá alertas de imóveis assim que houver novidades! 🏠`
+      );
+    }
+  } catch (err) {
+    console.error('❌ Erro webhook MP:', err.message);
+  }
+});
+
+// ── Rota legada (compatibilidade) ───────────────────────────
+app.get('/api/whatsapp/webhook', (req, res) => res.json({ ok: true, status: 'SaiuVaga Cloud API ativa ✅' }));
+app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
 
 // ─────────────────────────────────────────────────────────────
-// SCRAPER MODULAR — ZAP + VivaReal + MercadoLivre + ImovelWeb
-// Todas as fontes rodam em paralelo com fallback automático
-// Usa ScraperAPI como proxy rotativo residencial para bypassar 403
+// SCRAPER — ZAP + VivaReal com fallback de proxies
 // ─────────────────────────────────────────────────────────────
 
-// Faz request com fallback automático entre proxies:
-// 1. ScraperAPI → 2. Scrape.do → 3. BrightData → 4. Direto
 async function axiosProxy(url, headers = {}, timeout = 45000) {
   const scraperApiKey = process.env.SCRAPERAPI_KEY;
   const scrapeDoKey   = process.env.SCRAPEDO_KEY;
   const brightDataKey = process.env.BRIGHTDATA_KEY;
 
-  // Tenta ScraperAPI (modo simples — sem render, mais rápido e econômico)
   if (scraperApiKey) {
     try {
       const proxyUrl = `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}&country_code=br&keep_headers=true`;
@@ -681,7 +473,6 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
     }
   }
 
-  // Tenta Scrape.do
   if (scrapeDoKey) {
     try {
       const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}&geoCode=br`;
@@ -693,11 +484,9 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
     }
   }
 
-  // Tenta BrightData (proxy HTTP residencial — usa HTTP para não ser bloqueado pelo Railway)
   if (brightDataKey) {
     try {
       const { HttpProxyAgent } = require('http-proxy-agent');
-      // Porta 22225 via HTTP — Railway não bloqueia saída HTTP para esse host
       const proxyAgent = new HttpProxyAgent(`http://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:22225`);
       const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
       return res;
@@ -706,7 +495,6 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
     }
   }
 
-  // Fallback direto (sem proxy)
   return axios.get(url, { headers, timeout });
 }
 
@@ -718,7 +506,6 @@ const BUSCAS = [
   { bairro: 'Itaim Bibi',    region: 'itaim-bibi'    },
 ];
 
-// Converte bairro para slug de URL
 function toSlug(str) {
   return str.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -726,7 +513,6 @@ function toSlug(str) {
     .replace(/[^a-z0-9-]/g, '');
 }
 
-// ── SOURCE 1: ZAP Imóveis ────────────────────────────────────
 async function buscarZap(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
@@ -748,7 +534,6 @@ async function buscarZap(bairro) {
     .filter(i => i.preco > 0 && i.link.length > 30);
 }
 
-// ── SOURCE 2: VivaReal ────────────────────────────────────────
 async function buscarVivaReal(bairro) {
   const slug = toSlug(bairro);
   const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
@@ -770,58 +555,14 @@ async function buscarVivaReal(bairro) {
     .filter(i => i.preco > 0 && i.link.length > 30);
 }
 
-// ── SOURCE 3: Mercado Livre Imóveis (API oficial pública) ─────
-async function buscarMercadoLivre(bairro) {
-  // ML tem API pública oficial — proxy ajuda a evitar rate limit por IP de datacenter
-  const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1459&q=${encodeURIComponent(bairro + ' aluguel SP')}&limit=20`;
-  const { data } = await axiosProxy(url, { 'Accept': 'application/json' }, 45000);
-  return (data?.results || [])
-    .filter(i => i.price && i.title && i.permalink)
-    .map(i => ({
-      titulo: i.title,
-      preco: parseInt(i.price) || 0,
-      bairro, tipo: 'residencial', portal: 'MercadoLivre',
-      link: i.permalink.split('?')[0],
-    }))
-    .filter(i => i.preco > 0);
-}
-
-// ── SOURCE 4: ImovelWeb (RSS feed público) ────────────────────
-async function buscarImovelWeb(bairro) {
-  const slug = toSlug(bairro);
-  const url = `https://www.imovelweb.com.br/imoveis-aluguel-sao-paulo-sp-${slug}.rss`;
-  const { data: xml } = await axiosProxy(url, {
-    'User-Agent': 'Mozilla/5.0', 'Accept': 'application/rss+xml, text/xml',
-  }, 45000);
-  const $ = cheerio.load(xml, { xmlMode: true });
-  const imoveis = [];
-  $('item').each((_, el) => {
-    const titulo = $(el).find('title').text().trim();
-    const link = $(el).find('link').text().trim() || $(el).find('guid').text().trim();
-    const desc = $(el).find('description').text();
-    const precoMatch = desc.match(/R\$[\s]?([\d.,]+)/) || titulo.match(/R\$[\s]?([\d.,]+)/);
-    const preco = precoMatch ? parseInt(precoMatch[1].replace(/\D/g, '')) : 0;
-    if (titulo && link && preco > 0) {
-      imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'ImovelWeb', link: link.split('?')[0] });
-    }
-  });
-  return imoveis;
-}
-
-
-// ── FUNÇÃO PRINCIPAL: todas as fontes em paralelo ─────────────
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imóveis: ${bairro}`);
-
-  // Roda todas as fontes em paralelo — se uma falha, as outras continuam
   const resultados = await Promise.allSettled([
     buscarZap(bairro),
     buscarVivaReal(bairro),
   ]);
-
   const fontes = ['ZAP', 'VivaReal'];
   const todos = [];
-
   resultados.forEach((r, i) => {
     if (r.status === 'fulfilled' && r.value.length > 0) {
       console.log(`   ✓ ${r.value.length} imóveis via ${fontes[i]}`);
@@ -831,7 +572,6 @@ async function buscarOLX(bairro, region) {
       console.log(`   ⚠️ ${fontes[i]}: ${err}`);
     }
   });
-
   const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
   console.log(`   📦 Total: ${unicos.length} imóveis únicos de ${bairro}`);
   return unicos;
@@ -839,12 +579,10 @@ async function buscarOLX(bairro, region) {
 
 async function salvarImoveis(imoveis) {
   if (imoveis.length === 0) return 0;
-
   const { data, error } = await supabase
     .from('imoveis')
     .upsert(imoveis, { onConflict: 'link', ignoreDuplicates: true })
     .select();
-
   if (error) { console.error('   ✗ Erro ao salvar:', error.message); return 0; }
   const novos = data ? data.length : 0;
   if (novos > 0) console.log(`   💾 ${novos} imóveis novos salvos!`);
@@ -898,18 +636,14 @@ async function verificarAlertas() {
 async function rodarScraper() {
   console.log(`\n🚀 SaiuVaga — ${new Date().toLocaleString('pt-BR')}`);
   let total = 0;
-
   for (const b of BUSCAS) {
     const imoveis = await buscarOLX(b.bairro, b.region);
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
   }
-
   await verificarAlertas();
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
-// (Evolution API removida — usando Baileys direto)
-
-cron.schedule('*/15 * * * *', rodarScraper); // 15min para preservar créditos ScraperAPI
+cron.schedule('*/15 * * * *', rodarScraper);
 rodarScraper();
