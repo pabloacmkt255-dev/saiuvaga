@@ -276,16 +276,16 @@ sb.auth.getSession().then(async ({ data }) => {
 sb.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
     const user = session.user;
-    const { data: existe } = await sb.from('users').select('id, trial_usado, ativo').eq('id', user.id).maybeSingle();
-    if (!existe) {
-      await sb.from('users').insert({ id: user.id, email: user.email, nome: user.user_metadata?.full_name || '', whatsapp: '', plano: planoSelecionado, ativo: false });
-      try { await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: user.id, email: user.email }) }); } catch(e) {}
-      showSuccess('Trial ativado! 🎉', 'Seus 7 dias grátis começaram. Você receberá alertas no WhatsApp assim que surgir uma vaga!');
-    } else if (existe.trial_usado && !existe.ativo) {
+    // Só processa se o email já foi confirmado — trial é ativado pelo confirmado.html
+    if (!user.email_confirmed_at) return;
+    const { data: existe } = await sb.from('users').select('id, trial_usado, ativo, plano').eq('id', user.id).maybeSingle();
+    if (!existe) return; // novo usuário — aguarda confirmado.html processar
+    if (existe.trial_usado && !existe.ativo) {
       window.location.href = 'saiuvaga-pagamento.html';
     } else if (existe.ativo) {
       showSuccess('Bem-vindo de volta! 👋', 'Seus alertas continuam ativos.');
     }
+    // Sem trial e sem plano ativo — aguarda confirmado.html ativar
   }
 });
 
@@ -389,9 +389,10 @@ async function entrar() {
   const { data: user } = await sb.from('users').select('ativo, nome').eq('id', data.user.id).maybeSingle();
   if (user?.ativo) {
     showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`,'Seus alertas estão ativos. Redirecionando...');
-    setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
+    setTimeout(() => window.location.href = 'dashboard.html', 1500);
   } else {
     showSuccess('Login feito! ✓','Ative seu plano para começar a receber alertas de imóveis.');
+    setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
   }
 }
 
