@@ -486,11 +486,18 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 }
 
 const BUSCAS = [
-  { bairro: 'Pinheiros',     region: 'pinheiros'     },
-  { bairro: 'Vila Madalena', region: 'vila-madalena' },
-  { bairro: 'Faria Lima',    region: 'faria-lima'    },
-  { bairro: 'Moema',         region: 'moema'         },
-  { bairro: 'Itaim Bibi',    region: 'itaim-bibi'    },
+  // Bairros originais
+  { bairro: 'Pinheiros',      region: 'pinheiros'      },
+  { bairro: 'Vila Madalena',  region: 'vila-madalena'  },
+  { bairro: 'Faria Lima',     region: 'faria-lima'     },
+  { bairro: 'Moema',          region: 'moema'          },
+  { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
+  // Novos bairros
+  { bairro: 'Jardins',        region: 'jardins'        },
+  { bairro: 'Vila Olímpia',   region: 'vila-olimpia'   },
+  { bairro: 'Brooklin',       region: 'brooklin'       },
+  { bairro: 'Perdizes',       region: 'perdizes'       },
+  { bairro: 'Consolação',     region: 'consolacao'     },
 ];
 
 function toSlug(str) {
@@ -502,66 +509,62 @@ function toSlug(str) {
 
 async function buscarZap(bairro) {
   const slug = toSlug(bairro);
-  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axiosProxy(url, {
+  const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'x-domain': 'www.zapimoveis.com.br',
     'Origin': 'https://www.zapimoveis.com.br',
     'Referer': 'https://www.zapimoveis.com.br/',
-  }, 45000);
-  return (data?.search?.result?.listings || [])
-    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-    .map(i => ({
-      titulo: i.listing.title || `Imóvel - ${bairro}`,
-      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-      bairro, tipo: 'residencial', portal: 'ZAP',
-      link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
-    }))
-    .filter(i => i.preco > 0 && i.link.length > 30);
+  };
+  const PAGE_SIZE = 48;
+  const PAGES = 3; // 3 páginas × 48 = até 144 imóveis por bairro
+  const todos = [];
+
+  for (let page = 0; page < PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=${from}`;
+    try {
+      const { data } = await axiosProxy(url, headers, 45000);
+      const listings = data?.search?.result?.listings || [];
+      if (listings.length === 0) break; // sem mais páginas
+      const imoveis = listings
+        .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+        .map(i => ({
+          titulo: i.listing.title || `Imóvel - ${bairro}`,
+          preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+          bairro, tipo: 'residencial', portal: 'ZAP',
+          link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+        }))
+        .filter(i => i.preco > 0 && i.link.length > 30);
+      todos.push(...imoveis);
+      if (listings.length < PAGE_SIZE) break; // última página
+      await new Promise(r => setTimeout(r, 1000)); // delay entre páginas
+    } catch (e) {
+      console.log(`   ⚠️ ZAP página ${page + 1}: ${e.message?.slice(0, 50)}`);
+      break;
+    }
+  }
+  return todos;
 }
 
+// VivaReal descontinuou glue-api.vivareal.com.br (DNS inexistente desde 2024).
+// OLX Group unificou ZAP + VivaReal na mesma infraestrutura.
+// Volume compensado com paginação do ZAP (3 páginas × 48) + 5 bairros novos.
 async function buscarVivaReal(bairro) {
-  const slug = toSlug(bairro);
-  const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=24&from=0`;
-  const { data } = await axiosProxy(url, {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': 'application/json',
-    'x-domain': 'www.vivareal.com.br',
-    'Origin': 'https://www.vivareal.com.br',
-    'Referer': 'https://www.vivareal.com.br/',
-  }, 45000);
-  return (data?.search?.result?.listings || [])
-    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-    .map(i => ({
-      titulo: i.listing.title || `Imóvel - ${bairro}`,
-      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-      bairro, tipo: 'residencial', portal: 'VivaReal',
-      link: `https://www.vivareal.com.br${i.link?.href || ''}`,
-    }))
-    .filter(i => i.preco > 0 && i.link.length > 30);
+  return []; // desativado — DNS descontinuado
 }
 
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imóveis: ${bairro}`);
-  const resultados = await Promise.allSettled([
-    buscarZap(bairro),
-    buscarVivaReal(bairro),
-  ]);
-  const fontes = ['ZAP', 'VivaReal'];
-  const todos = [];
-  resultados.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value.length > 0) {
-      console.log(`   ✓ ${r.value.length} imóveis via ${fontes[i]}`);
-      todos.push(...r.value);
-    } else {
-      const err = r.status === 'rejected' ? r.reason?.message : 'sem resultados';
-      console.log(`   ⚠️ ${fontes[i]}: ${err}`);
-    }
-  });
-  const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
-  console.log(`   📦 Total: ${unicos.length} imóveis únicos de ${bairro}`);
-  return unicos;
+  try {
+    const imoveis = await buscarZap(bairro);
+    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+    console.log(`   ✓ ${unicos.length} imóveis via ZAP (${Math.ceil(unicos.length/48)} páginas)`);
+    return unicos;
+  } catch (e) {
+    console.log(`   ⚠️ ZAP: ${e.message?.slice(0, 60)}`);
+    return [];
+  }
 }
 
 async function salvarImoveis(imoveis) {
