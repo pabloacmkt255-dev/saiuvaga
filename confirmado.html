@@ -130,7 +130,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
     </div>
 
     <div style="margin-top:24px">
-      <a href="saiuvaga-cadastro.html" class="btn">Configurar meus alertas →</a>
+      <a href="dashboard.html" class="btn">Configurar meus alertas →</a>
       <br>
       <a href="saiuvaga-pagamento.html" class="btn-outline">Ver planos</a>
     </div>
@@ -153,22 +153,12 @@ const sb = createClient(
   'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
 );
 
-async function confirmar() {
+async function processarUsuario(user) {
   try {
-    // Supabase processa o token automaticamente via URL hash
-    const { data: { session }, error } = await sb.auth.getSession();
-
-    if (error || !session) {
-      showError('Link de confirmação inválido ou expirado. Por favor, solicite um novo cadastro.');
-      return;
-    }
-
-    const user = session.user;
-
-    // Verifica se já tem trial ativo
+    // Busca dados do usuário incluindo o plano escolhido
     const { data: userData } = await sb
       .from('users')
-      .select('id, trial_usado, ativo, nome')
+      .select('id, trial_usado, ativo, nome, plano')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -185,8 +175,20 @@ async function confirmar() {
       });
     }
 
-    if (userData?.trial_usado) {
-      // Trial já usado — mostra sucesso sem reativar
+    // Se escolheu plano pago, redireciona para pagamento
+    const planoPago = userData?.plano && userData.plano !== 'trial';
+    if (planoPago && !userData?.ativo) {
+      // Tracking antes de redirecionar
+      dispararTracking();
+      setTimeout(() => {
+        window.location.href = 'saiuvaga-pagamento.html';
+      }, 1500);
+      document.getElementById('state-loading').querySelector('.title').textContent = 'Email confirmado! Redirecionando para pagamento...';
+      return;
+    }
+
+    // Trial já ativo — apenas mostra sucesso
+    if (userData?.trial_usado || userData?.ativo) {
       showSuccess();
       return;
     }
@@ -201,15 +203,7 @@ async function confirmar() {
     const result = await res.json();
 
     if (result.ok || result.ja_usou) {
-      // Tracking: trial ativado
-      if (typeof gtag !== 'undefined') {
-        gtag('event', 'conversion', {'send_to': 'AW-18192818213/lead'});
-        gtag('event', 'sign_up', {'method': 'email_confirmed'});
-      }
-      if (typeof fbq !== 'undefined') {
-        fbq('track', 'CompleteRegistration');
-        fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19});
-      }
+      dispararTracking();
       showSuccess();
     } else {
       showError(result.erro || 'Erro ao ativar trial. Entre em contato.');
@@ -217,6 +211,17 @@ async function confirmar() {
 
   } catch (err) {
     showError('Erro inesperado: ' + err.message);
+  }
+}
+
+function dispararTracking() {
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'conversion', {'send_to': 'AW-18192818213/lead'});
+    gtag('event', 'sign_up', {'method': 'email_confirmed'});
+  }
+  if (typeof fbq !== 'undefined') {
+    fbq('track', 'CompleteRegistration');
+    fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19});
   }
 }
 
@@ -231,8 +236,36 @@ function showError(msg) {
   document.getElementById('error-msg').textContent = msg;
 }
 
-// Executa ao carregar
-confirmar();
+// Detecta sessão corretamente — onAuthStateChange captura o token do hash da URL
+// que o Supabase injeta automaticamente ao clicar no link de confirmação
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (session?.user) {
+      await processarUsuario(session.user);
+    }
+  } else if (event === 'USER_UPDATED') {
+    // Email confirmado com sucesso
+    if (session?.user) {
+      await processarUsuario(session.user);
+    }
+  }
+});
+
+// Fallback: tenta getSession após pequeno delay (caso token já esteja na sessão)
+setTimeout(async () => {
+  const loadingVisible = document.getElementById('state-loading').style.display !== 'none';
+  if (!loadingVisible) return; // já processou via onAuthStateChange
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      await processarUsuario(session.user);
+    } else {
+      showError('Link de confirmação inválido ou expirado. Por favor, solicite um novo cadastro.');
+    }
+  } catch(e) {
+    showError('Erro ao verificar sessão. Tente novamente ou solicite um novo link.');
+  }
+}, 2000);
 </script>
 </body>
 </html>
