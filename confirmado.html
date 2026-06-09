@@ -194,9 +194,16 @@ async function processarUsuario(user) {
     }
 
     // Ativa o trial
+    // Busca o token de sessão para autenticar a chamada
+    const { data: { session: currentSession } } = await sb.auth.getSession();
+    const token = currentSession?.access_token || '';
+
     const res = await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify({ user_id: user.id, email: user.email }),
     });
 
