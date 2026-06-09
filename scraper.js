@@ -596,7 +596,7 @@ async function verificarAlertas() {
       .select('*')
       .ilike('bairro', `%${filtro.bairro}%`)
       .lte('preco', filtro.preco_max)
-      .gte('encontrado_em', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+      .gte('encontrado_em', new Date(Date.now() - 20 * 60 * 1000).toISOString());
 
     if (!matches || matches.length === 0) continue;
 
@@ -635,5 +635,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
-cron.schedule('*/15 * * * *', rodarScraper);
+cron.schedule('*/20 * * * *', rodarScraper);
 rodarScraper();
