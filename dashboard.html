@@ -510,30 +510,36 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
 
 <script>
 // ── Config ──────────────────────────────────────────────────
-const SENHA = 'saiuvaga2024admin';
-const SUPABASE_URL = 'https://mlsqebefrjqbeujkxney.supabase.co';
-
-// ✅ CORRIGIDO: usando anon key (publishable) em vez de service key
-const SUPABASE_KEY = 'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP';
-
-const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-
+const API_BASE = 'https://saiuvaga-production.up.railway.app';
+// Senha validada no backend — não fica exposta no código fonte
+let adminToken = '';
 let allUsers = [];
 let currentFilter = 'todos';
 
-// ── Senha ────────────────────────────────────────────────────
-function unlock() {
+// ── Autenticação ─────────────────────────────────────────────
+async function unlock() {
   const pass = document.getElementById('lock-pass').value;
-  if (pass === SENHA) {
-    document.getElementById('lock-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadAll();
-    startClock();
-  } else {
+  if (!pass) return;
+
+  // Testa a senha contra o backend — se retornar 200, está correta
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/users`, {
+      headers: { 'Authorization': `Bearer ${pass}` }
+    });
+    if (res.ok) {
+      adminToken = pass;
+      document.getElementById('lock-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadAll();
+      startClock();
+    } else {
+      document.getElementById('lock-error').style.display = 'block';
+      document.getElementById('lock-pass').value = '';
+      document.getElementById('lock-pass').focus();
+    }
+  } catch (e) {
+    document.getElementById('lock-error').textContent = 'Erro de conexão com o servidor.';
     document.getElementById('lock-error').style.display = 'block';
-    document.getElementById('lock-pass').value = '';
-    document.getElementById('lock-pass').focus();
   }
 }
 
@@ -567,26 +573,23 @@ async function loadAll() {
 
 // ── Usuários ─────────────────────────────────────────────────
 async function loadUsers() {
-  const { data, error } = await sb
-    .from('users')
-    .select('*')
-    .order('criado_em', { ascending: false });
-
-  if (error) {
-    showError(`Erro ao carregar usuários: ${error.message} (código: ${error.code})`);
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/users`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    if (!res.ok) { showError(`Erro ao carregar usuários: ${res.status}`); return; }
+    const { data } = await res.json();
+    if (!data) return;
+    allUsers = data;
+    renderMetrics(data);
+    renderChart(data);
+    renderUsers(data);
+    document.getElementById('users-count').textContent = `${data.length} usuários`;
+  } catch (e) {
+    showError(`Erro ao carregar usuários: ${e.message}`);
     document.getElementById('users-tbody').innerHTML =
-      '<tr class="loading-row"><td colspan="9">Erro ao carregar dados. Verifique o console.</td></tr>';
-    console.error('Supabase error:', error);
-    return;
+      '<tr class="loading-row"><td colspan="9">Erro ao carregar dados.</td></tr>';
   }
-
-  if (!data) return;
-
-  allUsers = data;
-  renderMetrics(data);
-  renderChart(data);
-  renderUsers(data);
-  document.getElementById('users-count').textContent = `${data.length} usuários`;
 }
 
 function renderMetrics(users) {
@@ -719,16 +722,15 @@ function setFilter(f, btn) {
 
 // ── Pagamentos ───────────────────────────────────────────────
 async function loadPayments() {
-  const { data, error } = await sb
-    .from('users')
-    .select('nome, email, plano, ultimo_pagamento, mp_payment_id, plano_validade')
-    .not('ultimo_pagamento', 'is', null)
-    .order('ultimo_pagamento', { ascending: false })
-    .limit(10);
-
   const list = document.getElementById('pay-list');
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/payments`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    if (!res.ok) { list.innerHTML = '<div class="empty">Erro ao carregar pagamentos</div>'; return; }
+    const { data } = await res.json();
 
-  if (error || !data || !data.length) {
+  if (!data || !data.length) {
     list.innerHTML = '<div class="empty">Nenhum pagamento registrado ainda</div>';
     document.getElementById('pay-count').textContent = '0 pagamentos';
     return;
@@ -752,6 +754,9 @@ async function loadPayments() {
       <div class="pay-amount">${planoValor[p.plano] || '—'}</div>
     </div>
   `).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="empty">Erro ao carregar pagamentos</div>';
+  }
 }
 
 // ── Auto refresh a cada 60s ──────────────────────────────────
