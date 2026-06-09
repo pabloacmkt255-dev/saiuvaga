@@ -622,7 +622,7 @@ async function buscarZap(bairro) {
     'Referer': 'https://www.zapimoveis.com.br/',
   };
   const PAGE_SIZE = 48;
-  const PAGES = 3; // 3 páginas × 48 = até 144 imóveis por bairro
+  const PAGES = 1; // 1 página × 48 = até 48 imóveis por bairro (economia de créditos ScraperAPI)
   const todos = [];
 
   for (let page = 0; page < PAGES; page++) {
