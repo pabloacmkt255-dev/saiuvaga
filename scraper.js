@@ -1,4 +1,4 @@
-// scraper.js — SaiuVaga (Cloud API WhatsApp + Supabase + Mercado Pago)
+// scraper.js — SaiuVaga (Z-API WhatsApp + Supabase + Mercado Pago)
 require('dotenv').config();
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -17,9 +17,9 @@ const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
-// ── WhatsApp Cloud API ───────────────────────────────────────
-const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
-const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
+// ── Z-API WhatsApp ───────────────────────────────────────────
+const ZAPI_INSTANCE = process.env.ZAPI_INSTANCE;
+const ZAPI_TOKEN    = process.env.ZAPI_TOKEN;
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
@@ -32,32 +32,25 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
     `_Responda PARAR para cancelar alertas_`
   );
 
-  // Normaliza número: remove tudo que não é dígito, garante 55 na frente
   let phone = telefone.replace(/\D/g, '');
   if (!phone.startsWith('55')) phone = '55' + phone;
 
   try {
     const res = await axios.post(
-      `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: phone,
-        type: 'text',
-        text: { preview_url: false, body: mensagem }
-      },
+      `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`,
+      { phone, message: mensagem },
       {
         headers: {
-          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Client-Token': ZAPI_TOKEN
         }
       }
     );
-    console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.messages?.[0]?.id}`);
+    console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
     return true;
   } catch (err) {
-    const detail = err.response?.data?.error?.message || err.message;
-    console.error(`   ✗ Erro Cloud API: ${detail}`);
+    const detail = err.response?.data?.message || err.message;
+    console.error(`   ✗ Erro Z-API: ${detail}`);
     return false;
   }
 }
@@ -82,42 +75,36 @@ app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 // ── Rota de saúde ───────────────────────────────────────────
 app.get('/', (req, res) => res.json({
   status: 'SaiuVaga online ✅',
-  whatsapp: 'Cloud API ativa',
-  phone_id: WHATSAPP_PHONE_ID ? '✅ configurado' : '❌ faltando'
+  whatsapp: 'Z-API ativa',
+  zapi_instance: ZAPI_INSTANCE ? '✅ configurado' : '❌ faltando'
 }));
 
-// ── Webhook Meta — verificação ──────────────────────────────
+// ── Webhook Z-API — receber mensagens ────────────────────────
+app.post('/webhook', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const body = req.body;
+    if (!body || body.fromMe) return;
+    const from = body.phone;
+    const text = body.text?.message || body.message || '';
+    if (!from || !text) return;
+    console.log(`\n💬 WhatsApp de ${from}: "${text}"`);
+    await processarMensagem(from, text);
+  } catch (err) {
+    console.error('❌ Erro webhook:', err.message);
+  }
+});
+
+// ── Webhook GET (compatibilidade) ───────────────────────────
 app.get('/webhook', (req, res) => {
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
-    console.log('✅ Webhook Meta verificado!');
+    console.log('✅ Webhook verificado!');
     res.status(200).send(challenge);
   } else {
-    console.log('❌ Webhook verificação falhou');
-    res.sendStatus(403);
-  }
-});
-
-// ── Webhook Meta — receber mensagens ────────────────────────
-app.post('/webhook', async (req, res) => {
-  res.sendStatus(200); // responde IMEDIATAMENTE (Meta exige < 5s)
-  try {
-    const entry   = req.body?.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value   = changes?.value;
-    if (!value?.messages) return;
-    for (const msg of value.messages) {
-      if (msg.type !== 'text') continue;
-      const from = msg.from; // número com código do país ex: 5511999999999
-      const body = msg.text?.body || '';
-      if (!from || !body) continue;
-      console.log(`\n💬 WhatsApp de ${from}: "${body}"`);
-      await processarMensagem(from, body);
-    }
-  } catch (err) {
-    console.error('❌ Erro webhook:', err.message);
+    res.sendStatus(200);
   }
 });
 
@@ -449,8 +436,8 @@ app.post('/api/webhook/mp', async (req, res) => {
   }
 });
 
-// ── Rota legada (compatibilidade) ───────────────────────────
-app.get('/api/whatsapp/webhook', (req, res) => res.json({ ok: true, status: 'SaiuVaga Cloud API ativa ✅' }));
+// ── Rotas legadas ───────────────────────────────────────────
+app.get('/api/whatsapp/webhook', (req, res) => res.json({ ok: true, status: 'SaiuVaga Z-API ativa ✅' }));
 app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
 
 // ─────────────────────────────────────────────────────────────
