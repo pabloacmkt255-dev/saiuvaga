@@ -1,5 +1,6 @@
 // scraper.js — SaiuVaga (Z-API WhatsApp + Supabase + Mercado Pago)
 require('dotenv').config();
+const crypto = require('crypto');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
@@ -197,6 +198,18 @@ app.post('/api/trial/ativar', async (req, res) => {
     const { user_id, email } = req.body;
     if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
 
+    // Valida token de sessão Supabase — rejeita chamadas sem autenticação válida
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) return res.status(401).json({ erro: 'Autenticação obrigatória' });
+
+    const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !sessionUser) return res.status(401).json({ erro: 'Token inválido ou expirado' });
+
+    // Garante que o token pertence ao mesmo usuário da requisição
+    if (user_id && sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
+    if (email && sessionUser.email !== email) return res.status(403).json({ erro: 'Acesso negado' });
+
     const query = user_id
       ? supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('id', user_id).maybeSingle()
       : supabase.from('users').select('id, trial_usado, ativo, plano_validade').eq('email', email).maybeSingle();
@@ -386,13 +399,45 @@ app.post('/api/pagamento/cartao', async (req, res) => {
 });
 
 // ── Webhook Mercado Pago ────────────────────────────────────
-app.post('/api/webhook/mp', async (req, res) => {
+app.post('/api/webhook/mp', express.raw({ type: 'application/json' }), async (req, res) => {
+  // ── Validação de assinatura Mercado Pago ─────────────────
+  try {
+    const secret = process.env.MP_WEBHOOK_SECRET;
+    if (secret) {
+      const xSignature = req.headers['x-signature'] || '';
+      const xRequestId  = req.headers['x-request-id'] || '';
+      const urlParams   = new URLSearchParams(req.originalUrl.split('?')[1] || '');
+      const dataId      = urlParams.get('data.id') || '';
+
+      // Monta o manifest: ts=<timestamp>,v1=<hash>
+      const parts = {};
+      xSignature.split(',').forEach(p => {
+        const [k, v] = p.trim().split('=');
+        if (k && v) parts[k] = v;
+      });
+
+      if (parts.ts && parts.v1) {
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${parts.ts};`;
+        const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+        if (hmac !== parts.v1) {
+          console.warn('⚠️ Webhook MP: assinatura inválida — requisição ignorada');
+          return res.sendStatus(401);
+        }
+      }
+    }
+  } catch (sigErr) {
+    console.error('❌ Erro validação assinatura MP:', sigErr.message);
+    return res.sendStatus(401);
+  }
+
   res.sendStatus(200);
   try {
-    const { type, data } = req.body;
+    const body = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
+    const { type, data } = body;
     console.log(`\n📩 Webhook MP: type=${type} id=${data?.id}`);
     if (type !== 'payment' || !data?.id) return;
 
+    // Busca o pagamento real na API do MP para garantir integridade
     const payment = new Payment(mp);
     const pag = await payment.get({ id: data.id });
     console.log(`   Status: ${pag.status} | Valor: R$${pag.transaction_amount} | Email: ${pag.payer?.email}`);
