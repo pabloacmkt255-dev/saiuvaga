@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Problema no pagamento</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--g:#1D9E75;--gdk:#0B6B4E;--glt:#E0F5EE;--red:#E24B4A;--redlt:#FCEBEB;--ink:#0D110F;--ink3:#6B7570;--bg:#F4F6F4;--wh:#fff;--ln:#DDE4DE;--r:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px;-webkit-font-smoothing:antialiased}
+.card{background:var(--wh);border:1px solid var(--ln);border-radius:20px;padding:48px 40px;max-width:460px;width:100%;text-align:center}
+.logo{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:32px;font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;color:var(--ink)}
+.logo-mark{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:14px;height:14px}
+.icon{width:72px;height:72px;border-radius:50%;background:var(--redlt);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px}
+.title{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--ink);margin-bottom:8px}
+.sub{font-size:14px;color:var(--ink3);line-height:1.6;margin-bottom:28px}
+.reasons{background:var(--redlt);border-radius:var(--r);padding:16px;text-align:left;margin-bottom:24px}
+.reasons p{font-size:13px;font-weight:600;color:var(--red);margin-bottom:8px}
+.reasons ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+.reasons li{font-size:13px;color:var(--ink3);display:flex;gap:8px}
+.reasons li::before{content:'•';color:var(--red);flex-shrink:0}
+.btns{display:flex;flex-direction:column;gap:10px}
+.btn{display:block;background:var(--g);color:#fff;padding:14px 32px;border-radius:var(--r);text-decoration:none;font-weight:600;font-size:15px;font-family:'Plus Jakarta Sans',sans-serif;text-align:center;transition:background .2s}
+.btn:hover{background:var(--gdk)}
+.btn-outline{display:block;background:transparent;color:var(--ink3);padding:12px 32px;border-radius:var(--r);text-decoration:none;font-size:14px;border:1px solid var(--ln);text-align:center;transition:background .2s}
+.btn-outline:hover{background:var(--bg)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
+    SaiuVaga
+  </div>
+  <div class="icon">✕</div>
+  <div class="title">Problema no pagamento</div>
+  <div class="sub">Não conseguimos processar seu pagamento. Isso pode acontecer por alguns motivos:</div>
+  <div class="reasons">
+    <p>Possíveis causas</p>
+    <ul>
+      <li>Saldo insuficiente ou limite do cartão</li>
+      <li>Dados do cartão digitados incorretamente</li>
+      <li>Cartão bloqueado para compras online</li>
+      <li>Banco recusou a transação por segurança</li>
+    </ul>
+  </div>
+  <div class="btns">
+    <a href="saiuvaga-pagamento.html" class="btn">Tentar novamente →</a>
+    <a href="https://wa.me/5511984207437?text=Tive+um+problema+no+pagamento+do+SaiuVaga" class="btn-outline">Falar com suporte no WhatsApp</a>
+  </div>
+</div>
+</body>
+</html>

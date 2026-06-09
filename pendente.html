@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Pagamento em processamento</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--g:#1D9E75;--gdk:#0B6B4E;--glt:#E0F5EE;--amb:#F5A623;--amblt:#FAEEDA;--ink:#0D110F;--ink3:#6B7570;--bg:#F4F6F4;--wh:#fff;--ln:#DDE4DE;--r:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px;-webkit-font-smoothing:antialiased}
+.card{background:var(--wh);border:1px solid var(--ln);border-radius:20px;padding:48px 40px;max-width:460px;width:100%;text-align:center}
+.logo{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:32px;font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;color:var(--ink)}
+.logo-mark{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:14px;height:14px}
+.icon{width:72px;height:72px;border-radius:50%;background:var(--amblt);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px;animation:spin 2s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.title{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--ink);margin-bottom:8px}
+.sub{font-size:14px;color:var(--ink3);line-height:1.6;margin-bottom:24px}
+.info-box{background:var(--amblt);border-radius:var(--r);padding:16px 20px;margin-bottom:24px;text-align:left}
+.info-box p{font-size:13px;color:var(--ink3);line-height:1.6}
+.info-box strong{color:var(--ink);font-weight:600}
+.steps{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;text-align:left}
+.step{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--ink)}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gdk);flex-shrink:0}
+.btn{display:block;background:var(--g);color:#fff;padding:14px 32px;border-radius:var(--r);text-decoration:none;font-weight:600;font-size:15px;font-family:'Plus Jakarta Sans',sans-serif;text-align:center;transition:background .2s}
+.btn:hover{background:var(--gdk)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
+    SaiuVaga
+  </div>
+  <div class="icon">⏳</div>
+  <div class="title">Pagamento em processamento</div>
+  <div class="sub">Seu boleto ou Pix foi gerado! Agora é só pagar para ativar seu acesso.</div>
+  <div class="info-box">
+    <p><strong>Boleto bancário:</strong> pode levar até 2 dias úteis para compensar.<br>
+    <strong>Pix:</strong> confirmação em até 1 hora.<br><br>
+    Assim que identificarmos o pagamento, você receberá uma mensagem no WhatsApp com seu acesso ativado.</p>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div>Faça o pagamento do boleto ou Pix</div>
+    <div class="step"><div class="step-num">2</div>Aguarde a confirmação (até 2 dias úteis)</div>
+    <div class="step"><div class="step-num">3</div>Receba o aviso no WhatsApp e comece a receber alertas</div>
+  </div>
+  <a href="https://wa.me/5511984207437?text=Acabei+de+pagar+o+boleto+do+SaiuVaga" class="btn">Avisar que já paguei →</a>
+</div>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Pagamento confirmado!</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
+<script>
+  window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+  gtag('js',new Date());gtag('config','G-W12FH3ZNDP');gtag('config','AW-18192818213');
+</script>
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','26792201447075176');fbq('track','PageView');
+</script>
+<style>
+:root{--g:#1D9E75;--gdk:#0B6B4E;--glt:#E0F5EE;--ink:#0D110F;--ink3:#6B7570;--bg:#F4F6F4;--wh:#fff;--ln:#DDE4DE;--r:12px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:24px;-webkit-font-smoothing:antialiased}
+.card{background:var(--wh);border:1px solid var(--ln);border-radius:20px;padding:48px 40px;max-width:460px;width:100%;text-align:center}
+.logo{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:32px;font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;color:var(--ink)}
+.logo-mark{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:14px;height:14px}
+.icon{width:72px;height:72px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px;animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.title{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--ink);margin-bottom:8px}
+.sub{font-size:14px;color:var(--ink3);line-height:1.6;margin-bottom:28px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:var(--glt);border:1px solid rgba(29,158,117,.2);border-radius:99px;padding:6px 16px;font-size:13px;font-weight:600;color:var(--gdk);margin-bottom:20px}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.features{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;text-align:left}
+.feature{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink)}
+.feature-dot{width:20px;height:20px;border-radius:50%;background:var(--glt);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.btn{display:inline-block;background:var(--g);color:#fff;padding:14px 32px;border-radius:var(--r);text-decoration:none;font-weight:600;font-size:15px;font-family:'Plus Jakarta Sans',sans-serif;transition:background .2s}
+.btn:hover{background:var(--gdk)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
+    SaiuVaga
+  </div>
+  <div class="icon">✓</div>
+  <div class="badge"><div class="pulse"></div>Plano ativado!</div>
+  <div class="title">Pagamento confirmado!</div>
+  <div class="sub">Seu acesso está ativo. Você vai receber alertas de imóveis no WhatsApp assim que surgir uma nova vaga nos seus bairros.</div>
+  <div class="features">
+    <div class="feature"><div class="feature-dot">🔍</div>Monitoramento de +100 portais em SP</div>
+    <div class="feature"><div class="feature-dot">⚡</div>Alertas em menos de 2 minutos</div>
+    <div class="feature"><div class="feature-dot">📱</div>Notificação direto no WhatsApp</div>
+  </div>
+  <a href="dashboard.html" class="btn">Configurar meus alertas →</a>
+</div>
+<script>
+if(typeof gtag!=='undefined'){gtag('event','conversion',{'send_to':'AW-18192818213/purchase'});gtag('event','purchase');}
+if(typeof fbq!=='undefined'){fbq('track','Purchase',{'value':19,'currency':'BRL'});}
+</script>
+</body>
+</html>
