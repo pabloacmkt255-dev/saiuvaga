@@ -68,7 +68,21 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+// Guarda o raw body para validação do webhook do MP
+app.use((req, res, next) => {
+  if (req.path === '/api/webhook/mp') {
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => { data += chunk; });
+    req.on('end', () => {
+      req.rawBody = data;
+      try { req.body = JSON.parse(data); } catch(e) { req.body = {}; }
+      next();
+    });
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
@@ -399,7 +413,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
 });
 
 // ── Webhook Mercado Pago ────────────────────────────────────
-app.post('/api/webhook/mp', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhook/mp', async (req, res) => {
   // ── Validação de assinatura Mercado Pago ─────────────────
   try {
     const secret = process.env.MP_WEBHOOK_SECRET;
@@ -409,7 +423,6 @@ app.post('/api/webhook/mp', express.raw({ type: 'application/json' }), async (re
       const urlParams   = new URLSearchParams(req.originalUrl.split('?')[1] || '');
       const dataId      = urlParams.get('data.id') || '';
 
-      // Monta o manifest: ts=<timestamp>,v1=<hash>
       const parts = {};
       xSignature.split(',').forEach(p => {
         const [k, v] = p.trim().split('=');
@@ -432,8 +445,7 @@ app.post('/api/webhook/mp', express.raw({ type: 'application/json' }), async (re
 
   res.sendStatus(200);
   try {
-    const body = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
-    const { type, data } = body;
+    const { type, data } = req.body;
     console.log(`\n📩 Webhook MP: type=${type} id=${data?.id}`);
     if (type !== 'payment' || !data?.id) return;
 
@@ -484,6 +496,54 @@ app.post('/api/webhook/mp', express.raw({ type: 'application/json' }), async (re
 // ── Rotas legadas ───────────────────────────────────────────
 app.get('/api/whatsapp/webhook', (req, res) => res.json({ ok: true, status: 'SaiuVaga Z-API ativa ✅' }));
 app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
+
+// ── Admin API (dashboard) ────────────────────────────────────
+// Valida senha via header Authorization: Bearer <senha>
+// Usa supabaseAdmin (service_key) para ler todos os dados
+const supabaseAdmin = require('@supabase/supabase-js')
+  .createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'saiuvaga2024admin';
+
+function verificarAdmin(req, res) {
+  const auth = req.headers['authorization'] || '';
+  const senha = auth.replace('Bearer ', '').trim();
+  if (senha !== ADMIN_SECRET) {
+    res.status(401).json({ erro: 'Acesso negado' });
+    return false;
+  }
+  return true;
+}
+
+app.get('/api/admin/users', async (req, res) => {
+  if (!verificarAdmin(req, res)) return;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (error) return res.status(500).json({ erro: error.message });
+    res.json({ data });
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+
+app.get('/api/admin/payments', async (req, res) => {
+  if (!verificarAdmin(req, res)) return;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('nome, email, plano, ultimo_pagamento, mp_payment_id, plano_validade')
+      .not('ultimo_pagamento', 'is', null)
+      .order('ultimo_pagamento', { ascending: false })
+      .limit(10);
+    if (error) return res.status(500).json({ erro: error.message });
+    res.json({ data });
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
 
 // ─────────────────────────────────────────────────────────────
 // SCRAPER — ZAP + VivaReal com fallback de proxies
