@@ -192,7 +192,7 @@ input:-webkit-autofill:focus {
         <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo" autocomplete="name"></div>
         <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
         <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
-        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password"></div>
+        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" inputmode="text"></div>
 
         <!-- Trial grátis — sempre começa no trial, planos pagos aparecem após confirmar email -->
         <div class="plan-cards">
@@ -204,7 +204,7 @@ input:-webkit-autofill:focus {
           </div>
         </div>
 
-        <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
+        <button class="submit-btn" id="btn-cadastrar" onclick="this.style.opacity='0.7'; cadastrar()">
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Criar conta grátis &rarr;</span>
         </button>
@@ -361,12 +361,11 @@ async function cadastrar() {
   const email = emailEl?.value.trim() || '';
   const wpp   = wppEl?.value.trim() || '';
   const pass  = document.getElementById('reg-pass').value;
-  console.log('DEBUG cadastrar:', {nome: !!nome, email: !!email, wpp: !!wpp, pass: pass?.length});
   if (!nome) { showError('Preencha o nome completo.'); return; }
   if (!email) { showError('Preencha o e-mail.'); return; }
   if (!wpp) { showError('Preencha o WhatsApp.'); return; }
-  if (!pass) { showError('Preencha a senha.'); return; }
-  if (pass.length < 8) { showError('A senha precisa ter pelo menos 8 caracteres.'); return; }
+  if (!pass) { showError('Preencha a senha — mínimo 8 caracteres.'); return; }
+  if (pass.length < 8) { showError('Senha muito curta — mínimo 8 caracteres.'); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
   const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
   if (error) {
