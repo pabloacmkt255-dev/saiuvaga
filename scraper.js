@@ -556,9 +556,11 @@ async function buscarViaApify(bairro) {
 
   const slug = toSlug(bairro);
   const input = {
-    transactionType: 'RENTAL',
-    locations: [{ neighborhood: bairro, city: 'São Paulo', state: 'SP' }],
-    maxResults: 48,
+    location: `${bairro}, Sao Paulo`,
+    limit: 48,
+    maximize_coverage: false,
+    below_market_price: false,
+    near_transit: false,
   };
 
   try {
@@ -573,16 +575,22 @@ async function buscarViaApify(bairro) {
     if (!Array.isArray(items) || items.length === 0) return [];
 
     return items
-      .filter(i => i.price || i.rentPrice || i.totalPrice)
-      .map(i => ({
-        titulo: i.title || i.description?.slice(0, 80) || `Imóvel - ${bairro}`,
-        preco: parseInt(i.price || i.rentPrice || i.totalPrice) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'ZAP',
-        link: i.url || i.link || `https://www.zapimoveis.com.br/`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => {
+        // Filtra apenas aluguel residencial
+        const offers = i.pricing?.offers || [];
+        const temAluguel = offers.some(o => o.business_type === 'rental');
+        const residencial = i.attributes?.usage_types?.includes('residential');
+        return temAluguel && residencial;
+      })
+      .map(i => {
+        const ofertaAluguel = i.pricing.offers.find(o => o.business_type === 'rental');
+        const preco = ofertaAluguel?.amount || 0;
+        const titulo = i.content?.title || `Imóvel - ${bairro}`;
+        const link = i.source_context?.url || 'https://www.zapimoveis.com.br/';
+        const bairroDado = i.location?.neighborhood || bairro;
+        return { titulo, preco, bairro: bairroDado, tipo: 'residencial', portal: 'ZAP', link };
+      })
+      .filter(i => i.preco > 0 && i.link.length > 20);
   } catch (e) {
     console.log(`   ↩️ Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return null; // null = tenta fallback
