@@ -252,6 +252,11 @@ input:-webkit-autofill:focus {
 
 <script>
 const { createClient } = supabase;
+// Garante que botão nunca fica preso como disabled ao carregar
+window.addEventListener('load', () => {
+  const btn = document.getElementById('btn-cadastrar');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+});
 const sb = createClient('https://mlsqebefrjqbeujkxney.supabase.co','sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP');
 
 sb.auth.getSession().then(async ({ data }) => {
@@ -324,10 +329,14 @@ function mascaraFone(el) {
 
 function setLoading(btnId, spinId, loading) {
   const btn = document.getElementById(btnId);
-  document.getElementById(spinId).style.display = loading ? 'block' : 'none';
-  btn.disabled = loading;
-  const t = btn.querySelector('span');
-  if (t) t.style.opacity = loading ? '0' : '1';
+  const spin = document.getElementById(spinId);
+  if (spin) spin.style.display = loading ? 'block' : 'none';
+  if (btn) {
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '0.7' : '1';
+    const t = btn.querySelector('span');
+    if (t) t.style.opacity = loading ? '0' : '1';
+  }
 }
 
 function showError(msg, tipo='erro') {
@@ -346,13 +355,14 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
+  // Garante botão desbloqueado antes de começar
+  const btnCad = document.getElementById('btn-cadastrar');
+  if (btnCad) { btnCad.disabled = false; btnCad.style.opacity = '1'; }
+
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
   const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
   const pass  = (document.getElementById('reg-pass')?.value || '');
-
-  // Scroll para o topo para mostrar erros
-  document.getElementById('error-msg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   if (!nome) { showError('Preencha o nome completo.'); window.scrollTo(0,0); return; }
   if (!email) { showError('Preencha o e-mail.'); window.scrollTo(0,0); return; }
