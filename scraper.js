@@ -546,8 +546,48 @@ app.get('/api/admin/payments', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// SCRAPER — ZAP + VivaReal com fallback de proxies
+// SCRAPER — Apify (principal) + ScraperAPI (fallback)
 // ─────────────────────────────────────────────────────────────
+
+// Busca imóveis via Apify actor fatihtahta/zap-imoveis-scraper
+async function buscarViaApify(bairro) {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return null;
+
+  const slug = toSlug(bairro);
+  const input = {
+    transactionType: 'RENTAL',
+    locations: [{ neighborhood: bairro, city: 'São Paulo', state: 'SP' }],
+    maxResults: 48,
+  };
+
+  try {
+    // Dispara o actor e aguarda resultado
+    const runRes = await axios.post(
+      `https://api.apify.com/v2/acts/fatihtahta~zap-imoveis-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
+      input,
+      { headers: { 'Content-Type': 'application/json' }, timeout: 130000 }
+    );
+
+    const items = runRes.data || [];
+    if (!Array.isArray(items) || items.length === 0) return [];
+
+    return items
+      .filter(i => i.price || i.rentPrice || i.totalPrice)
+      .map(i => ({
+        titulo: i.title || i.description?.slice(0, 80) || `Imóvel - ${bairro}`,
+        preco: parseInt(i.price || i.rentPrice || i.totalPrice) || 0,
+        bairro,
+        tipo: 'residencial',
+        portal: 'ZAP',
+        link: i.url || i.link || `https://www.zapimoveis.com.br/`,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+  } catch (e) {
+    console.log(`   ↩️ Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return null; // null = tenta fallback
+  }
+}
 
 async function axiosProxy(url, headers = {}, timeout = 45000) {
   const scraperApiKey = process.env.SCRAPERAPI_KEY;
@@ -661,10 +701,23 @@ async function buscarVivaReal(bairro) {
 
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imóveis: ${bairro}`);
+
+  // Tenta Apify primeiro (actor dedicado ZAP)
+  if (process.env.APIFY_TOKEN) {
+    const apifyResult = await buscarViaApify(bairro);
+    if (apifyResult !== null) {
+      const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
+      console.log(`   ✓ ${unicos.length} imóveis via Apify`);
+      return unicos;
+    }
+    console.log(`   ↩️ Apify falhou, tentando ZAP direto...`);
+  }
+
+  // Fallback: ZAP via ScraperAPI
   try {
     const imoveis = await buscarZap(bairro);
     const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imóveis via ZAP (${Math.ceil(unicos.length/48)} páginas)`);
+    console.log(`   ✓ ${unicos.length} imóveis via ZAP/ScraperAPI`);
     return unicos;
   } catch (e) {
     console.log(`   ⚠️ ZAP: ${e.message?.slice(0, 60)}`);
