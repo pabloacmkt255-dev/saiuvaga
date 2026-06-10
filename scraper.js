@@ -762,7 +762,7 @@ async function verificarAlertas() {
       .select('*')
       .ilike('bairro', `%${filtro.bairro}%`)
       .lte('preco', filtro.preco_max)
-      .gte('encontrado_em', new Date(Date.now() - 20 * 60 * 1000).toISOString());
+      .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString() // 65min — cobre o ciclo de 60min);
 
     if (!matches || matches.length === 0) continue;
 
@@ -801,5 +801,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
 }
 
-cron.schedule('*/20 * * * *', rodarScraper);
+cron.schedule('*/60 * * * *', rodarScraper); // 1x por hora — economia de créditos Apify
 rodarScraper();
