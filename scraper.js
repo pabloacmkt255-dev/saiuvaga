@@ -19,8 +19,9 @@ const mp = new MercadoPagoConfig({
 });
 
 // -- Z-API WhatsApp -------------------------------------------
-const ZAPI_INSTANCE = process.env.ZAPI_INSTANCE;
-const ZAPI_TOKEN    = process.env.ZAPI_TOKEN;
+const ZAPI_INSTANCE    = process.env.ZAPI_INSTANCE;
+const ZAPI_TOKEN       = process.env.ZAPI_TOKEN;
+const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN || ZAPI_TOKEN; // Token de segurança do cliente Z-API
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
@@ -43,7 +44,7 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Client-Token': ZAPI_TOKEN
+          'Client-Token': ZAPI_CLIENT_TOKEN
         }
       }
     );
@@ -60,8 +61,16 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
 const app = express();
 
 // -- CORS ----------------------------------------------------
+const ALLOWED_ORIGINS = [
+  'https://saiuvaga.com.br',
+  'https://www.saiuvaga.com.br',
+  'http://localhost:3000', // dev local
+];
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -389,9 +398,9 @@ app.post('/api/pagamento/cartao', async (req, res) => {
         }],
         payer: { email, name: nome },
         back_urls: {
-          success: 'https://saiuvaga.com.br/sucesso.html',
-          failure: 'https://saiuvaga.com.br/erro.html',
-          pending: 'https://saiuvaga.com.br/pendente.html',
+          success: 'https://saiuvaga.com.br/confirmado.html',
+          failure: 'https://saiuvaga.com.br/saiuvaga-pagamento.html?erro=1',
+          pending: 'https://saiuvaga.com.br/saiuvaga-pagamento.html?pendente=1',
         },
         auto_return: 'approved',
         external_reference: user_id || email,
@@ -456,15 +465,26 @@ app.post('/api/webhook/mp', async (req, res) => {
     if (pag.status !== 'approved') return;
 
     const email = pag.payer?.email;
-    if (!email) return;
+    const externalRef = pag.external_reference; // user_id ou email, enviado pelo /api/pagamento/cartao
 
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, whatsapp, nome')
-      .eq('email', email)
-      .maybeSingle();
+    let userQuery = email
+      ? supabase.from('users').select('id, whatsapp, nome').eq('email', email).maybeSingle()
+      : null;
 
-    if (!user) { console.log(`   ⚠_  Usuario nao encontrado para ${email}`); return; }
+    let { data: user } = userQuery ? await userQuery : { data: null };
+
+    // Fallback: tenta pelo external_reference (cartão de crédito via Preference)
+    if (!user && externalRef) {
+      // Pode ser um UUID (user_id) ou email
+      const isUUID = /^[0-9a-f-]{36}$/.test(externalRef);
+      const q = isUUID
+        ? supabase.from('users').select('id, whatsapp, nome').eq('id', externalRef).maybeSingle()
+        : supabase.from('users').select('id, whatsapp, nome').eq('email', externalRef).maybeSingle();
+      const { data: userRef } = await q;
+      user = userRef;
+    }
+
+    if (!user) { console.log(`   ⚠️  Usuario nao encontrado para email=${email} ref=${externalRef}`); return; }
 
     const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
     const nomePlano = diasPlano === 90 ? 'trimestral' : 'mensal';
@@ -750,7 +770,7 @@ async function salvarImoveis(imoveis) {
 async function verificarAlertas() {
   const { data: filtros } = await supabase
     .from('filtros')
-    .select('*, users(whatsapp, ativo)')
+    .select('*, users(whatsapp, ativo, plano_validade)')
     .eq('ativo', true);
 
   if (!filtros || filtros.length === 0) return;
@@ -758,6 +778,10 @@ async function verificarAlertas() {
   for (const filtro of filtros) {
     const whatsapp = filtro.users?.whatsapp;
     if (!whatsapp || !filtro.users?.ativo) continue;
+
+    // Checa se o plano ainda está dentro da validade
+    const validade = filtro.users?.plano_validade ? new Date(filtro.users.plano_validade) : null;
+    if (!validade || validade <= new Date()) continue;
 
     const { data: matches } = await supabase
       .from('imoveis')
@@ -803,5 +827,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
-cron.schedule('*/60 * * * *', rodarScraper); // 1x por hora - economia de creditos Apify
+cron.schedule('0 * * * *', rodarScraper); // 1x por hora, no minuto 0
 rodarScraper();
