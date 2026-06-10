@@ -204,7 +204,7 @@ input:-webkit-autofill:focus {
           </div>
         </div>
 
-        <button class="submit-btn" id="btn-cadastrar" onclick="this.style.opacity='0.7'; cadastrar()">
+        <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Criar conta grátis &rarr;</span>
         </button>
@@ -355,25 +355,40 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
-  // Garante botão desbloqueado antes de começar
-  const btnCad = document.getElementById('btn-cadastrar');
-  if (btnCad) { btnCad.disabled = false; btnCad.style.opacity = '1'; }
-
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
   const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
   const pass  = (document.getElementById('reg-pass')?.value || '');
 
-  if (!nome) { showError('Preencha o nome completo.'); window.scrollTo(0,0); return; }
-  if (!email) { showError('Preencha o e-mail.'); window.scrollTo(0,0); return; }
-  if (!wpp) { showError('Preencha o WhatsApp.'); window.scrollTo(0,0); return; }
-  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.'); window.scrollTo(0,0); return; }
+  if (!nome) { showError('Preencha o nome completo.'); document.getElementById('reg-nome').focus(); return; }
+  if (!email) { showError('Preencha o e-mail.'); document.getElementById('reg-email').focus(); return; }
+  if (!wpp) { showError('Preencha o WhatsApp.'); document.getElementById('reg-wpp').focus(); return; }
+  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.'); document.getElementById('reg-pass').focus(); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
-  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
+  let data, error;
+  try {
+    const res = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
+    data = res.data; error = res.error;
+  } catch(e) {
+    setLoading('btn-cadastrar','spin1',false);
+    showError('Erro de conexão. Verifique sua internet e tente novamente.');
+    console.error('Supabase signUp exception:', e);
+    return;
+  }
   if (error) {
     setLoading('btn-cadastrar','spin1',false);
-    const msgs = { 'User already registered':'Este e-mail já está cadastrado. Faça login.', 'Password should be at least 6 characters':'Senha muito curta.', 'Unable to validate email address':'E-mail inválido.' };
-    showError(msgs[error.message] || error.message); return;
+    console.error('Supabase signUp error:', error);
+    const msgs = {
+      'User already registered': 'Este e-mail já está cadastrado. Faça login.',
+      'Email already in use': 'Este e-mail já está cadastrado. Faça login.',
+      'Password should be at least 6 characters': 'Senha muito curta (mínimo 8 caracteres).',
+      'Unable to validate email address': 'E-mail inválido.',
+      'Signup is disabled': 'Cadastro temporariamente desativado. Tente novamente mais tarde.',
+      'rate limit': 'Muitas tentativas. Aguarde alguns minutos.'
+    };
+    const errKey = Object.keys(msgs).find(k => error.message && error.message.toLowerCase().includes(k.toLowerCase()));
+    showError(errKey ? msgs[errKey] : ('Erro: ' + error.message));
+    return;
   }
   if (data.user) {
     await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
