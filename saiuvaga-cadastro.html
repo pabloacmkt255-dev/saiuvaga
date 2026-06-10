@@ -194,13 +194,24 @@ input:-webkit-autofill:focus {
         <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
         <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off"></div>
 
-        <!-- Trial grátis — sempre começa no trial, planos pagos aparecem após confirmar email -->
+        <!-- Planos -->
         <div class="plan-cards">
-          <div class="plan-card trial-card on" style="cursor:default">
-            <div class="plan-badge" style="background:var(--gdk)">&#127873; Grátis</div>
-            <div class="plan-card-name">Trial gratuito</div>
+          <div class="plan-card trial-card on" id="card-trial" onclick="selectPlan(this,'trial')">
+            <div class="plan-badge" style="background:var(--gdk)">🎁 Grátis</div>
+            <div class="plan-card-name">Trial</div>
             <div class="plan-card-price">R$0<sub>/7 dias</sub></div>
             <div class="plan-card-desc">Sem cartão · Cancela quando quiser</div>
+          </div>
+          <div class="plan-card" id="card-mensal" onclick="selectPlan(this,'mensal')">
+            <div class="plan-card-name">Mensal</div>
+            <div class="plan-card-price">R$19<sub>/mês</sub></div>
+            <div class="plan-card-desc">Alertas ilimitados · Cancela quando quiser</div>
+          </div>
+          <div class="plan-card" id="card-trimestral" onclick="selectPlan(this,'trimestral')">
+            <div class="plan-badge">⭐ Popular</div>
+            <div class="plan-card-name">Trimestral</div>
+            <div class="plan-card-price">R$38<sub>/3 meses</sub></div>
+            <div class="plan-card-desc">Equivale a 1 mês grátis</div>
           </div>
         </div>
 
@@ -355,6 +366,9 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
+  // Garante que o botão nunca fica preso de chamada anterior
+  setLoading('btn-cadastrar','spin1',false);
+
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
   const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
@@ -428,7 +442,7 @@ async function entrar() {
 async function loginGoogle() {
   if (typeof gtag !== 'undefined') gtag('event','sign_up',{'method':'google'});
   if (typeof fbq !== 'undefined') fbq('track','Lead');
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://saiuvaga.com.br/saiuvaga-pagamento.html' } });
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
   if (error) showError('Erro ao conectar com Google: ' + error.message);
 }
 
