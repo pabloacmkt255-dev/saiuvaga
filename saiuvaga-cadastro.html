@@ -117,6 +117,16 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .wpp-btn svg{width:30px;height:30px;fill:#fff}
 .wpp-btn::before{content:'';position:absolute;inset:0;border-radius:50%;background:#25D366;animation:wpp-pulse 2.5s ease-out infinite;z-index:-1}
 @keyframes wpp-pulse{0%{transform:scale(1);opacity:.6}70%,100%{transform:scale(1.55);opacity:0}}
+
+/* Corrige autopreenchimento amarelo do browser */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  -webkit-text-fill-color: #0D110F !important;
+  caret-color: #0D110F !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
 </style>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-W12FH3ZNDP');gtag('config','AW-18192818213');</script>
@@ -348,9 +358,20 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
-  const nome  = document.getElementById('reg-nome').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const wpp   = document.getElementById('reg-wpp').value.trim();
+  // Força leitura dos campos — corrige problema de autopreenchimento do browser
+  const nomeEl  = document.getElementById('reg-nome');
+  const emailEl = document.getElementById('reg-email');
+  const wppEl   = document.getElementById('reg-wpp');
+  const passEl  = document.getElementById('reg-pass');
+
+  // Dispara change event para garantir que o valor está atualizado
+  [nomeEl, emailEl, wppEl, passEl].forEach(el => {
+    if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  const nome  = nomeEl?.value.trim() || '';
+  const email = emailEl?.value.trim() || '';
+  const wpp   = wppEl?.value.trim() || '';
   const pass  = document.getElementById('reg-pass').value;
   if (!nome || !email || !wpp || !pass) { showError('Preencha todos os campos.'); return; }
   if (pass.length < 8) { showError('A senha precisa ter pelo menos 8 caracteres.'); return; }
