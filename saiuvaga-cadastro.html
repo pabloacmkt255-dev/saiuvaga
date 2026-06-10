@@ -192,7 +192,7 @@ input:-webkit-autofill:focus {
         <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo" autocomplete="name"></div>
         <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
         <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
-        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" inputmode="text"></div>
+        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off"></div>
 
         <!-- Trial grátis — sempre começa no trial, planos pagos aparecem após confirmar email -->
         <div class="plan-cards">
@@ -346,26 +346,18 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
-  // Força leitura dos campos — corrige problema de autopreenchimento do browser
-  const nomeEl  = document.getElementById('reg-nome');
-  const emailEl = document.getElementById('reg-email');
-  const wppEl   = document.getElementById('reg-wpp');
-  const passEl  = document.getElementById('reg-pass');
+  const nome  = (document.getElementById('reg-nome')?.value || '').trim();
+  const email = (document.getElementById('reg-email')?.value || '').trim();
+  const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
+  const pass  = (document.getElementById('reg-pass')?.value || '');
 
-  // Dispara change event para garantir que o valor está atualizado
-  [nomeEl, emailEl, wppEl, passEl].forEach(el => {
-    if (el) el.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  // Scroll para o topo para mostrar erros
+  document.getElementById('error-msg')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  const nome  = nomeEl?.value.trim() || '';
-  const email = emailEl?.value.trim() || '';
-  const wpp   = wppEl?.value.trim() || '';
-  const pass  = document.getElementById('reg-pass').value;
-  if (!nome) { showError('Preencha o nome completo.'); return; }
-  if (!email) { showError('Preencha o e-mail.'); return; }
-  if (!wpp) { showError('Preencha o WhatsApp.'); return; }
-  if (!pass) { showError('Preencha a senha — mínimo 8 caracteres.'); return; }
-  if (pass.length < 8) { showError('Senha muito curta — mínimo 8 caracteres.'); return; }
+  if (!nome) { showError('Preencha o nome completo.'); window.scrollTo(0,0); return; }
+  if (!email) { showError('Preencha o e-mail.'); window.scrollTo(0,0); return; }
+  if (!wpp) { showError('Preencha o WhatsApp.'); window.scrollTo(0,0); return; }
+  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.'); window.scrollTo(0,0); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
   const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
   if (error) {
