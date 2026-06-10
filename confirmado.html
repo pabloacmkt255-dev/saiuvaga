@@ -199,7 +199,8 @@ async function processarUsuario(user) {
 
     // Trial já usado mas sem plano ativo — manda para pagamento
     if (userData?.trial_usado) {
-      showSuccess();
+      document.getElementById('state-loading').querySelector('.title').textContent = 'Trial expirado. Redirecionando para planos...';
+      setTimeout(() => { window.location.href = 'saiuvaga-pagamento.html'; }, 1500);
       return;
     }
 
