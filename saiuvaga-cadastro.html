@@ -410,11 +410,15 @@ async function cadastrar() {
   setLoading('btn-cadastrar','spin1',false);
   if (typeof gtag !== 'undefined') { gtag('event','conversion',{'send_to':'AW-18192818213/lead'}); gtag('event','sign_up',{'method':'email'}); }
   if (typeof fbq !== 'undefined') fbq('track','Lead');
-  // Se escolheu plano pago, redireciona para pagamento após confirmar e-mail
-  const msg = planoSelecionado === 'trial'
-    ? `Enviamos um link para ${email}. Clique nele para ativar seus 7 dias grátis.`
-    : `Enviamos um link para ${email}. Após confirmar, você será redirecionado para o pagamento.`;
-  showSuccess('Confirme seu e-mail! 📧', msg);
+  // Mensagem diferente por plano
+  if (planoSelecionado === 'trial') {
+    showSuccess('Confirme seu e-mail! 📧', `Enviamos um link para ${email}. Clique nele para ativar seus 7 dias grátis.`);
+    document.querySelector('.wapp-preview').style.display = 'block';
+  } else {
+    const nomePlano = planoSelecionado === 'trimestral' ? 'Trimestral (R$38)' : 'Mensal (R$19)';
+    showSuccess('Confirme seu e-mail! 📧', `Enviamos um link para ${email}. Após confirmar, você será redirecionado para o pagamento do Plano ${nomePlano}.`);
+    document.querySelector('.wapp-preview').style.display = 'none';
+  }
 }
 
 async function entrar() {
