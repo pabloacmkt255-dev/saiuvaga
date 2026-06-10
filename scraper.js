@@ -1,4 +1,4 @@
-// scraper.js — SaiuVaga (Z-API WhatsApp + Supabase + Mercado Pago)
+// scraper.js - SaiuVaga (Z-API WhatsApp + Supabase + Mercado Pago)
 require('dotenv').config();
 const crypto = require('crypto');
 const axios = require('axios');
@@ -8,7 +8,7 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
-// ── Clientes ────────────────────────────────────────────────
+// -- Clientes ------------------------------------------------
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -18,16 +18,16 @@ const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
-// ── Z-API WhatsApp ───────────────────────────────────────────
+// -- Z-API WhatsApp -------------------------------------------
 const ZAPI_INSTANCE = process.env.ZAPI_INSTANCE;
 const ZAPI_TOKEN    = process.env.ZAPI_TOKEN;
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   const mensagem = mensagemLivre || (
-    `🚨 *Nova vaga — ${imovel.bairro}!*\n\n` +
+    `🚨 *Nova vaga - ${imovel.bairro}!*\n\n` +
     `🏠 ${imovel.titulo}\n` +
-    `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mês\n` +
+    `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mes\n` +
     `📍 ${imovel.bairro}, SP\n` +
     `🔗 ${imovel.link}\n\n` +
     `_Responda PARAR para cancelar alertas_`
@@ -51,15 +51,15 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
     return true;
   } catch (err) {
     const detail = err.response?.data?.message || err.message;
-    console.error(`   ✗ Erro Z-API: ${detail}`);
+    console.error(`   _ Erro Z-API: ${detail}`);
     return false;
   }
 }
 
-// ── Servidor Express ────────────────────────────────────────
+// -- Servidor Express ----------------------------------------
 const app = express();
 
-// ── CORS ────────────────────────────────────────────────────
+// -- CORS ----------------------------------------------------
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -68,7 +68,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Guarda o raw body para validação do webhook do MP
+// Guarda o raw body para validacao do webhook do MP
 app.use((req, res, next) => {
   if (req.path === '/api/webhook/mp') {
     let data = '';
@@ -87,14 +87,14 @@ app.use((req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`\n🌐 Servidor rodando na porta ${PORT}`));
 
-// ── Rota de saúde ───────────────────────────────────────────
+// -- Rota de saude -------------------------------------------
 app.get('/', (req, res) => res.json({
   status: 'SaiuVaga online ✅',
   whatsapp: 'Z-API ativa',
   zapi_instance: ZAPI_INSTANCE ? '✅ configurado' : '❌ faltando'
 }));
 
-// ── Webhook Z-API — receber mensagens ────────────────────────
+// -- Webhook Z-API - receber mensagens ------------------------
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
   try {
@@ -110,7 +110,7 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// ── Webhook GET (compatibilidade) ───────────────────────────
+// -- Webhook GET (compatibilidade) ---------------------------
 app.get('/webhook', (req, res) => {
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
@@ -123,7 +123,7 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// ── Função de processar mensagem (chatbot Groq) ──────────────
+// -- Funcao de processar mensagem (chatbot Groq) --------------
 async function processarMensagem(phone, text) {
   try {
     const numero = phone.replace(/\D/g, '').replace(/^55/, '');
@@ -138,44 +138,44 @@ async function processarMensagem(phone, text) {
     const ativo = user?.ativo && validade && validade > agora;
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
-    let contextoUsuario = 'Usuário não cadastrado no SaiuVaga.';
+    let contextoUsuario = 'Usuario nao cadastrado no SaiuVaga.';
     if (user) {
       if (ativo && user.plano === 'trial') {
-        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: trial ativo com ${diasRestantes} dias restantes.`;
+        contextoUsuario = `Usuario cadastrado: ${user.nome || 'sem nome'}. Status: trial ativo com ${diasRestantes} dias restantes.`;
       } else if (ativo) {
-        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: plano ${user.plano} ativo com ${diasRestantes} dias restantes.`;
+        contextoUsuario = `Usuario cadastrado: ${user.nome || 'sem nome'}. Status: plano ${user.plano} ativo com ${diasRestantes} dias restantes.`;
       } else if (user.trial_usado) {
-        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: trial expirado, aguardando pagamento.`;
+        contextoUsuario = `Usuario cadastrado: ${user.nome || 'sem nome'}. Status: trial expirado, aguardando pagamento.`;
       } else {
-        contextoUsuario = `Usuário cadastrado: ${user.nome || 'sem nome'}. Status: cadastrado mas ainda não ativou o trial.`;
+        contextoUsuario = `Usuario cadastrado: ${user.nome || 'sem nome'}. Status: cadastrado mas ainda nao ativou o trial.`;
       }
     }
 
-    const prompt = `Você é o assistente virtual do SaiuVaga, um serviço de alertas de imóveis em tempo real via WhatsApp em São Paulo.
+    const prompt = `Voce e o assistente virtual do SaiuVaga, um servico de alertas de imoveis em tempo real via WhatsApp em Sao Paulo.
 
-INFORMAÇÕES DO PRODUTO:
+INFORMACOES DO PRODUTO:
 - Monitora +100 portais (OLX, ZAP, Viva Real e outros) 24 horas por dia
-- Avisa o usuário no WhatsApp em menos de 2 minutos quando surge um imóvel com seus critérios
-- Trial gratuito: 7 dias, sem cartão de crédito
-- Plano Mensal: R$19/mês
-- Plano Trimestral: R$38/3 meses (1 mês grátis)
+- Avisa o usuario no WhatsApp em menos de 2 minutos quando surge um imovel com seus criterios
+- Trial gratuito: 7 dias, sem cartao de credito
+- Plano Mensal: R$19/mes
+- Plano Trimestral: R$38/3 meses (1 mes gratis)
 - Site: saiuvaga.com.br
 - Para cadastrar: saiuvaga.com.br/saiuvaga-cadastro.html
 
-CONTEXTO DO USUÁRIO ATUAL:
+CONTEXTO DO USUARIO ATUAL:
 ${contextoUsuario}
 
 REGRAS:
-- Responda em português brasileiro, de forma simpática e direta
-- Máximo 3 parágrafos curtos — WhatsApp é informal
-- Use emojis com moderação
-- Se não souber responder, diga que vai verificar e peça para aguardar
-- Não invente informações sobre o produto
-- Se perguntarem sobre preço, sempre mencione o trial gratuito primeiro
+- Responda em portugues brasileiro, de forma simpatica e direta
+- Maximo 3 paragrafos curtos - WhatsApp e informal
+- Use emojis com moderacao
+- Se nao souber responder, diga que vai verificar e peca para aguardar
+- Nao invente informacoes sobre o produto
+- Se perguntarem sobre preco, sempre mencione o trial gratuito primeiro
 - Se o trial expirou, incentive o pagamento gentilmente
-- Nunca seja robótico — seja humano e empático
+- Nunca seja robotico - seja humano e empatico
 
-MENSAGEM DO USUÁRIO:
+MENSAGEM DO USUARIO:
 ${text}
 
 Responda como assistente do SaiuVaga:`;
@@ -206,21 +206,21 @@ Responda como assistente do SaiuVaga:`;
   }
 }
 
-// ── Ativar trial de 7 dias ──────────────────────────────────
+// -- Ativar trial de 7 dias ----------------------------------
 app.post('/api/trial/ativar', async (req, res) => {
   try {
     const { user_id, email } = req.body;
-    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatorio' });
 
-    // Valida token de sessão Supabase — rejeita chamadas sem autenticação válida
+    // Valida token de sessao Supabase - rejeita chamadas sem autenticacao valida
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace('Bearer ', '').trim();
-    if (!token) return res.status(401).json({ erro: 'Autenticação obrigatória' });
+    if (!token) return res.status(401).json({ erro: 'Autenticacao obrigatoria' });
 
     const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
-    if (authErr || !sessionUser) return res.status(401).json({ erro: 'Token inválido ou expirado' });
+    if (authErr || !sessionUser) return res.status(401).json({ erro: 'Token invalido ou expirado' });
 
-    // Garante que o token pertence ao mesmo usuário da requisição
+    // Garante que o token pertence ao mesmo usuario da requisicao
     if (user_id && sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
     if (email && sessionUser.email !== email) return res.status(403).json({ erro: 'Acesso negado' });
 
@@ -230,9 +230,9 @@ app.post('/api/trial/ativar', async (req, res) => {
 
     const { data: user } = await query;
 
-    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
-    if (user.trial_usado) return res.status(400).json({ erro: 'Trial já utilizado', ja_usou: true });
-    if (user.ativo) return res.status(400).json({ erro: 'Usuário já possui plano ativo' });
+    if (!user) return res.status(404).json({ erro: 'Usuario nao encontrado' });
+    if (user.trial_usado) return res.status(400).json({ erro: 'Trial ja utilizado', ja_usou: true });
+    if (user.ativo) return res.status(400).json({ erro: 'Usuario ja possui plano ativo' });
 
     const validade = new Date();
     validade.setDate(validade.getDate() + 7);
@@ -244,7 +244,7 @@ app.post('/api/trial/ativar', async (req, res) => {
       plano: 'trial',
     }).eq('id', user.id);
 
-    console.log(`   🎁 Trial ativado para ${email || user_id} até ${validade.toLocaleDateString('pt-BR')}`);
+    console.log(`   🎁 Trial ativado para ${email || user_id} ate ${validade.toLocaleDateString('pt-BR')}`);
     res.json({ ok: true, mensagem: 'Trial de 7 dias ativado!', validade: validade.toISOString(), dias: 7 });
 
   } catch (err) {
@@ -253,18 +253,18 @@ app.post('/api/trial/ativar', async (req, res) => {
   }
 });
 
-// ── Verificar status do usuário ─────────────────────────────
+// -- Verificar status do usuario -----------------------------
 app.get('/api/usuario/status', async (req, res) => {
   try {
     const { user_id, email } = req.query;
-    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatório' });
+    if (!user_id && !email) return res.status(400).json({ erro: 'user_id ou email obrigatorio' });
 
     const query = user_id
       ? supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('id', user_id).maybeSingle()
       : supabase.from('users').select('id, ativo, trial_usado, plano, plano_validade').eq('email', email).maybeSingle();
 
     const { data: user } = await query;
-    if (!user) return res.status(404).json({ erro: 'Usuário não encontrado' });
+    if (!user) return res.status(404).json({ erro: 'Usuario nao encontrado' });
 
     const agora = new Date();
     const validade = user.plano_validade ? new Date(user.plano_validade) : null;
@@ -290,11 +290,11 @@ app.get('/api/usuario/status', async (req, res) => {
   }
 });
 
-// ── Gerar Pix ───────────────────────────────────────────────
+// -- Gerar Pix -----------------------------------------------
 app.post('/api/pagamento/pix', async (req, res) => {
   try {
     const { email, nome, cpf, plano = 'mensal' } = req.body;
-    if (!email || !nome || !cpf) return res.status(400).json({ erro: 'email, nome e cpf são obrigatórios' });
+    if (!email || !nome || !cpf) return res.status(400).json({ erro: 'email, nome e cpf sao obrigatorios' });
 
     const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
@@ -303,7 +303,7 @@ app.post('/api/pagamento/pix', async (req, res) => {
     const result = await payment.create({
       body: {
         transaction_amount: valor,
-        description: `SaiuVaga — Plano ${plano}`,
+        description: `SaiuVaga - Plano ${plano}`,
         payment_method_id: 'pix',
         payer: {
           email,
@@ -331,11 +331,11 @@ app.post('/api/pagamento/pix', async (req, res) => {
   }
 });
 
-// ── Gerar Boleto ────────────────────────────────────────────
+// -- Gerar Boleto --------------------------------------------
 app.post('/api/pagamento/boleto', async (req, res) => {
   try {
     const { email, nome, cpf, cep, plano = 'mensal' } = req.body;
-    if (!email || !nome || !cpf || !cep) return res.status(400).json({ erro: 'email, nome, cpf e cep são obrigatórios' });
+    if (!email || !nome || !cpf || !cep) return res.status(400).json({ erro: 'email, nome, cpf e cep sao obrigatorios' });
 
     const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
@@ -344,7 +344,7 @@ app.post('/api/pagamento/boleto', async (req, res) => {
     const result = await payment.create({
       body: {
         transaction_amount: valor,
-        description: `SaiuVaga — Plano ${plano}`,
+        description: `SaiuVaga - Plano ${plano}`,
         payment_method_id: 'bolbradesco',
         payer: {
           email,
@@ -369,11 +369,11 @@ app.post('/api/pagamento/boleto', async (req, res) => {
   }
 });
 
-// ── Gerar Cartão ────────────────────────────────────────────
+// -- Gerar Cartao --------------------------------------------
 app.post('/api/pagamento/cartao', async (req, res) => {
   try {
     const { email, nome, user_id, plano = 'mensal' } = req.body;
-    if (!email || !nome) return res.status(400).json({ erro: 'email e nome são obrigatórios' });
+    if (!email || !nome) return res.status(400).json({ erro: 'email e nome sao obrigatorios' });
 
     const valores = { mensal: 19.90, trimestral: 38.00 };
     const valor = valores[plano] || 19.90;
@@ -382,7 +382,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
     const result = await preference.create({
       body: {
         items: [{
-          title: `SaiuVaga — Plano ${plano}`,
+          title: `SaiuVaga - Plano ${plano}`,
           quantity: 1,
           unit_price: valor,
           currency_id: 'BRL',
@@ -407,14 +407,14 @@ app.post('/api/pagamento/cartao', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Erro Cartão:', err.message);
+    console.error('❌ Erro Cartao:', err.message);
     res.status(500).json({ erro: err.message });
   }
 });
 
-// ── Webhook Mercado Pago ────────────────────────────────────
+// -- Webhook Mercado Pago ------------------------------------
 app.post('/api/webhook/mp', async (req, res) => {
-  // ── Validação de assinatura Mercado Pago ─────────────────
+  // -- Validacao de assinatura Mercado Pago -----------------
   try {
     const secret = process.env.MP_WEBHOOK_SECRET;
     if (secret) {
@@ -433,13 +433,13 @@ app.post('/api/webhook/mp', async (req, res) => {
         const manifest = `id:${dataId};request-id:${xRequestId};ts:${parts.ts};`;
         const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
         if (hmac !== parts.v1) {
-          console.warn('⚠️ Webhook MP: assinatura inválida — requisição ignorada');
+          console.warn('⚠_ Webhook MP: assinatura invalida - requisicao ignorada');
           return res.sendStatus(401);
         }
       }
     }
   } catch (sigErr) {
-    console.error('❌ Erro validação assinatura MP:', sigErr.message);
+    console.error('❌ Erro validacao assinatura MP:', sigErr.message);
     return res.sendStatus(401);
   }
 
@@ -464,7 +464,7 @@ app.post('/api/webhook/mp', async (req, res) => {
       .eq('email', email)
       .maybeSingle();
 
-    if (!user) { console.log(`   ⚠️  Usuário não encontrado para ${email}`); return; }
+    if (!user) { console.log(`   ⚠_  Usuario nao encontrado para ${email}`); return; }
 
     const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
     const validade = new Date();
@@ -477,15 +477,15 @@ app.post('/api/webhook/mp', async (req, res) => {
       mp_payment_id: String(pag.id),
     }).eq('id', user.id);
 
-    console.log(`   ✅ Usuário ${email} ativado por ${diasPlano} dias`);
+    console.log(`   ✅ Usuario ${email} ativado por ${diasPlano} dias`);
 
     if (user.whatsapp) {
       await enviarWhatsApp(
         user.whatsapp, null,
         `✅ *Pagamento confirmado!*\n\n` +
-        `Olá ${user.nome || ''}! Seu acesso ao SaiuVaga foi ativado.\n` +
-        `📅 Válido por ${diasPlano} dias.\n\n` +
-        `Você receberá alertas de imóveis assim que houver novidades! 🏠`
+        `Ola ${user.nome || ''}! Seu acesso ao SaiuVaga foi ativado.\n` +
+        `📅 Valido por ${diasPlano} dias.\n\n` +
+        `Voce recebera alertas de imoveis assim que houver novidades! 🏠`
       );
     }
   } catch (err) {
@@ -493,11 +493,11 @@ app.post('/api/webhook/mp', async (req, res) => {
   }
 });
 
-// ── Rotas legadas ───────────────────────────────────────────
+// -- Rotas legadas -------------------------------------------
 app.get('/api/whatsapp/webhook', (req, res) => res.json({ ok: true, status: 'SaiuVaga Z-API ativa ✅' }));
 app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
 
-// ── Admin API (dashboard) ────────────────────────────────────
+// -- Admin API (dashboard) ------------------------------------
 // Valida senha via header Authorization: Bearer <senha>
 // Usa supabaseAdmin (service_key) para ler todos os dados
 const supabaseAdmin = require('@supabase/supabase-js')
@@ -545,11 +545,11 @@ app.get('/api/admin/payments', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// SCRAPER — Apify (principal) + ScraperAPI (fallback)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
+// SCRAPER - Apify (principal) + ScraperAPI (fallback)
+// -------------------------------------------------------------
 
-// Busca imóveis via Apify actor fatihtahta/zap-imoveis-scraper
+// Busca imoveis via Apify actor fatihtahta/zap-imoveis-scraper
 async function buscarViaApify(bairro) {
   const token = process.env.APIFY_TOKEN;
   if (!token) return null;
@@ -585,14 +585,14 @@ async function buscarViaApify(bairro) {
       .map(i => {
         const ofertaAluguel = i.pricing.offers.find(o => o.business_type === 'rental');
         const preco = ofertaAluguel?.amount || 0;
-        const titulo = i.content?.title || `Imóvel - ${bairro}`;
+        const titulo = i.content?.title || `Imovel - ${bairro}`;
         const link = i.source_context?.url || 'https://www.zapimoveis.com.br/';
         const bairroDado = i.location?.neighborhood || bairro;
         return { titulo, preco, bairro: bairroDado, tipo: 'residencial', portal: 'ZAP', link };
       })
       .filter(i => i.preco > 0 && i.link.length > 20);
   } catch (e) {
-    console.log(`   ↩️ Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    console.log(`   __ Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return null; // null = tenta fallback
   }
 }
@@ -609,7 +609,7 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
-      console.log(`   ↩️ ScraperAPI falhou (${e.message.slice(0,50)}), tentando Scrape.do...`);
+      console.log(`   __ ScraperAPI falhou (${e.message.slice(0,50)}), tentando Scrape.do...`);
     }
   }
 
@@ -620,7 +620,7 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
-      console.log(`   ↩️ Scrape.do falhou (${e.message.slice(0,50)}), tentando BrightData...`);
+      console.log(`   __ Scrape.do falhou (${e.message.slice(0,50)}), tentando BrightData...`);
     }
   }
 
@@ -631,7 +631,7 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
       const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
       return res;
     } catch (e) {
-      console.log(`   ↩️ BrightData falhou (${e.message.slice(0,40)}), tentando direto...`);
+      console.log(`   __ BrightData falhou (${e.message.slice(0,40)}), tentando direto...`);
     }
   }
 
@@ -647,10 +647,10 @@ const BUSCAS = [
   { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
   // Novos bairros
   { bairro: 'Jardins',        region: 'jardins'        },
-  { bairro: 'Vila Olímpia',   region: 'vila-olimpia'   },
+  { bairro: 'Vila Olimpia',   region: 'vila-olimpia'   },
   { bairro: 'Brooklin',       region: 'brooklin'       },
   { bairro: 'Perdizes',       region: 'perdizes'       },
-  { bairro: 'Consolação',     region: 'consolacao'     },
+  { bairro: 'Consolacao',     region: 'consolacao'     },
 ];
 
 function toSlug(str) {
@@ -670,7 +670,7 @@ async function buscarZap(bairro) {
     'Referer': 'https://www.zapimoveis.com.br/',
   };
   const PAGE_SIZE = 48;
-  const PAGES = 1; // 1 página × 48 = até 48 imóveis por bairro (economia de créditos ScraperAPI)
+  const PAGES = 1; // 1 pagina _ 48 = ate 48 imoveis por bairro (economia de creditos ScraperAPI)
   const todos = [];
 
   for (let page = 0; page < PAGES; page++) {
@@ -679,21 +679,21 @@ async function buscarZap(bairro) {
     try {
       const { data } = await axiosProxy(url, headers, 45000);
       const listings = data?.search?.result?.listings || [];
-      if (listings.length === 0) break; // sem mais páginas
+      if (listings.length === 0) break; // sem mais paginas
       const imoveis = listings
         .filter(i => i?.listing?.pricingInfos?.[0]?.price)
         .map(i => ({
-          titulo: i.listing.title || `Imóvel - ${bairro}`,
+          titulo: i.listing.title || `Imovel - ${bairro}`,
           preco: parseInt(i.listing.pricingInfos[0].price) || 0,
           bairro, tipo: 'residencial', portal: 'ZAP',
           link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
         }))
         .filter(i => i.preco > 0 && i.link.length > 30);
       todos.push(...imoveis);
-      if (listings.length < PAGE_SIZE) break; // última página
-      await new Promise(r => setTimeout(r, 1000)); // delay entre páginas
+      if (listings.length < PAGE_SIZE) break; // ultima pagina
+      await new Promise(r => setTimeout(r, 1000)); // delay entre paginas
     } catch (e) {
-      console.log(`   ⚠️ ZAP página ${page + 1}: ${e.message?.slice(0, 50)}`);
+      console.log(`   ⚠_ ZAP pagina ${page + 1}: ${e.message?.slice(0, 50)}`);
       break;
     }
   }
@@ -702,33 +702,33 @@ async function buscarZap(bairro) {
 
 // VivaReal descontinuou glue-api.vivareal.com.br (DNS inexistente desde 2024).
 // OLX Group unificou ZAP + VivaReal na mesma infraestrutura.
-// Volume compensado com paginação do ZAP (3 páginas × 48) + 5 bairros novos.
+// Volume compensado com paginacao do ZAP (3 paginas _ 48) + 5 bairros novos.
 async function buscarVivaReal(bairro) {
-  return []; // desativado — DNS descontinuado
+  return []; // desativado - DNS descontinuado
 }
 
 async function buscarOLX(bairro, region) {
-  console.log(`\n🔍 Buscando imóveis: ${bairro}`);
+  console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
   // Tenta Apify primeiro (actor dedicado ZAP)
   if (process.env.APIFY_TOKEN) {
     const apifyResult = await buscarViaApify(bairro);
     if (apifyResult !== null) {
       const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
-      console.log(`   ✓ ${unicos.length} imóveis via Apify`);
+      console.log(`   ✓ ${unicos.length} imoveis via Apify`);
       return unicos;
     }
-    console.log(`   ↩️ Apify falhou, tentando ZAP direto...`);
+    console.log(`   __ Apify falhou, tentando ZAP direto...`);
   }
 
   // Fallback: ZAP via ScraperAPI
   try {
     const imoveis = await buscarZap(bairro);
     const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imóveis via ZAP/ScraperAPI`);
+    console.log(`   ✓ ${unicos.length} imoveis via ZAP/ScraperAPI`);
     return unicos;
   } catch (e) {
-    console.log(`   ⚠️ ZAP: ${e.message?.slice(0, 60)}`);
+    console.log(`   ⚠_ ZAP: ${e.message?.slice(0, 60)}`);
     return [];
   }
 }
@@ -739,9 +739,9 @@ async function salvarImoveis(imoveis) {
     .from('imoveis')
     .upsert(imoveis, { onConflict: 'link', ignoreDuplicates: true })
     .select();
-  if (error) { console.error('   ✗ Erro ao salvar:', error.message); return 0; }
+  if (error) { console.error('   _ Erro ao salvar:', error.message); return 0; }
   const novos = data ? data.length : 0;
-  if (novos > 0) console.log(`   💾 ${novos} imóveis novos salvos!`);
+  if (novos > 0) console.log(`   💾 ${novos} imoveis novos salvos!`);
   return novos;
 }
 
@@ -762,7 +762,7 @@ async function verificarAlertas() {
       .select('*')
       .ilike('bairro', `%${filtro.bairro}%`)
       .lte('preco', filtro.preco_max)
-      .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString() // 65min - cobre o ciclo de 60min);
+      .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString()); // 65min - cobre o ciclo de 60min
 
     if (!matches || matches.length === 0) continue;
 
@@ -790,7 +790,7 @@ async function verificarAlertas() {
 }
 
 async function rodarScraper() {
-  console.log(`\n🚀 SaiuVaga — ${new Date().toLocaleString('pt-BR')}`);
+  console.log(`\n🚀 SaiuVaga - ${new Date().toLocaleString('pt-BR')}`);
   let total = 0;
   for (const b of BUSCAS) {
     const imoveis = await buscarOLX(b.bairro, b.region);
@@ -798,7 +798,7 @@ async function rodarScraper() {
     await new Promise(r => setTimeout(r, 2000));
   }
   await verificarAlertas();
-  console.log(`\n✅ Concluído! ${total} novos imóveis salvos.\n`);
+  console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
 cron.schedule('*/60 * * * *', rodarScraper); // 1x por hora - economia de creditos Apify
