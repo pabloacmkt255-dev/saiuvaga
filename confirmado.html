@@ -167,8 +167,8 @@ async function processarUsuario(user) {
       await sb.from('users').insert({
         id: user.id,
         email: user.email,
-        nome: user.user_metadata?.full_name || '',
-        whatsapp: '',
+        nome: user.user_metadata?.full_name || user.user_metadata?.name || '',
+        whatsapp: user.user_metadata?.phone || '',
         plano: 'trial',
         ativo: false,
         trial_usado: false,
