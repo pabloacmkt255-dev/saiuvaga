@@ -194,25 +194,13 @@ input:-webkit-autofill:focus {
         <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
         <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="new-password"></div>
 
-        <!-- PLANOS: Trial + Mensal + Trimestral -->
+        <!-- Trial grátis — sempre começa no trial, planos pagos aparecem após confirmar email -->
         <div class="plan-cards">
-          <div class="plan-card trial-card on" onclick="selectPlan(this,'trial')">
+          <div class="plan-card trial-card on" style="cursor:default">
             <div class="plan-badge" style="background:var(--gdk)">&#127873; Grátis</div>
-            <div class="plan-card-name">Trial</div>
+            <div class="plan-card-name">Trial gratuito</div>
             <div class="plan-card-price">R$0<sub>/7 dias</sub></div>
             <div class="plan-card-desc">Sem cartão · Cancela quando quiser</div>
-          </div>
-          <div class="plan-card" onclick="selectPlan(this,'mensal')">
-            <div class="plan-badge">Popular</div>
-            <div class="plan-card-name">Mensal</div>
-            <div class="plan-card-price">R$19<sub>/mês</sub></div>
-            <div class="plan-card-desc">Alertas ilimitados em tempo real</div>
-          </div>
-          <div class="plan-card" onclick="selectPlan(this,'trimestral')">
-            <div class="plan-badge" style="background:#f59e0b">1 mês grátis</div>
-            <div class="plan-card-name">Trimestral</div>
-            <div class="plan-card-price">R$38<sub>/3 meses</sub></div>
-            <div class="plan-card-desc">R$12,67/mês</div>
           </div>
         </div>
 
@@ -373,7 +361,11 @@ async function cadastrar() {
   const email = emailEl?.value.trim() || '';
   const wpp   = wppEl?.value.trim() || '';
   const pass  = document.getElementById('reg-pass').value;
-  if (!nome || !email || !wpp || !pass) { showError('Preencha todos os campos.'); return; }
+  console.log('DEBUG cadastrar:', {nome: !!nome, email: !!email, wpp: !!wpp, pass: pass?.length});
+  if (!nome) { showError('Preencha o nome completo.'); return; }
+  if (!email) { showError('Preencha o e-mail.'); return; }
+  if (!wpp) { showError('Preencha o WhatsApp.'); return; }
+  if (!pass) { showError('Preencha a senha.'); return; }
   if (pass.length < 8) { showError('A senha precisa ter pelo menos 8 caracteres.'); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
   const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
