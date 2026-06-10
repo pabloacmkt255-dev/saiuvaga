@@ -155,14 +155,14 @@ const sb = createClient(
 
 async function processarUsuario(user) {
   try {
-    // Busca dados do usuário incluindo o plano escolhido
-    const { data: userData } = await sb
+    // Busca dados do usuário incluindo o plano escolhido no cadastro
+    let { data: userData } = await sb
       .from('users')
       .select('id, trial_usado, ativo, nome, plano')
       .eq('id', user.id)
       .maybeSingle();
 
-    // Garante que o usuário existe na tabela
+    // Garante que o usuário existe na tabela (Google OAuth pode chegar aqui sem registro)
     if (!userData) {
       await sb.from('users').insert({
         id: user.id,
@@ -173,22 +173,32 @@ async function processarUsuario(user) {
         ativo: false,
         trial_usado: false,
       });
+      // Rebusca para pegar o registro recém-criado
+      const { data: novoUser } = await sb
+        .from('users')
+        .select('id, trial_usado, ativo, nome, plano')
+        .eq('id', user.id)
+        .maybeSingle();
+      userData = novoUser;
     }
 
-    // Se escolheu plano pago, redireciona para pagamento
-    const planoPago = userData?.plano && userData.plano !== 'trial';
-    if (planoPago && !userData?.ativo) {
-      // Tracking antes de redirecionar
-      dispararTracking();
-      setTimeout(() => {
-        window.location.href = 'saiuvaga-pagamento.html';
-      }, 1500);
-      document.getElementById('state-loading').querySelector('.title').textContent = 'Email confirmado! Redirecionando para pagamento...';
+    // Já tem plano ativo — mostra sucesso direto
+    if (userData?.ativo) {
+      showSuccess();
       return;
     }
 
-    // Trial já ativo — apenas mostra sucesso
-    if (userData?.trial_usado || userData?.ativo) {
+    // Escolheu plano pago no cadastro — redireciona para pagamento
+    const planoPago = userData?.plano && userData.plano !== 'trial';
+    if (planoPago) {
+      dispararTracking();
+      document.getElementById('state-loading').querySelector('.title').textContent = 'E-mail confirmado! Redirecionando para pagamento...';
+      setTimeout(() => { window.location.href = 'saiuvaga-pagamento.html'; }, 1500);
+      return;
+    }
+
+    // Trial já usado mas sem plano ativo — manda para pagamento
+    if (userData?.trial_usado) {
       showSuccess();
       return;
     }
