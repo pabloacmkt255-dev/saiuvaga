@@ -467,11 +467,13 @@ app.post('/api/webhook/mp', async (req, res) => {
     if (!user) { console.log(`   ⚠_  Usuario nao encontrado para ${email}`); return; }
 
     const diasPlano = pag.transaction_amount >= 35 ? 90 : 30;
+    const nomePlano = diasPlano === 90 ? 'trimestral' : 'mensal';
     const validade = new Date();
     validade.setDate(validade.getDate() + diasPlano);
 
     await supabase.from('users').update({
       ativo: true,
+      plano: nomePlano,
       plano_validade: validade.toISOString(),
       ultimo_pagamento: new Date().toISOString(),
       mp_payment_id: String(pag.id),
