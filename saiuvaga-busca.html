@@ -371,22 +371,38 @@ async function init() {
 
     userId = session.user.id;
 
-    const { data: user } = await sb.from('users')
-      .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
-      .eq('id', userId).maybeSingle();
-
+    // Usa backend (service_key) para evitar bloqueio de RLS no anon key
     const agora = new Date();
-    const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
-    const ativo = !!(user?.ativo && validade && validade > agora);
-
-    // Bloqueio total para quem não tem plano ativo
-    if (!ativo) { showWall('pay'); return; }
+    let statusOk = false;
+    let user = null;
+    try {
+      const statusRes = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${userId}`);
+      const status = await statusRes.json();
+      const validade = status.validade ? new Date(status.validade) : null;
+      if (!status.ativo || !validade || validade <= agora) { showWall('pay'); return; }
+      statusOk = true;
+      // Busca preferências de alerta (não bloqueado por RLS pois usuário está autenticado)
+      const { data: userData } = await sb.from('users')
+        .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
+        .eq('id', userId).maybeSingle();
+      user = userData || { ativo: true, plano: status.plano, plano_validade: status.validade, trial_usado: status.trial_usado };
+    } catch(e) {
+      // Fallback direto ao Supabase
+      const { data: userData } = await sb.from('users')
+        .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
+        .eq('id', userId).maybeSingle();
+      user = userData;
+      const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
+      const ativo = !!(user?.ativo && validade && validade > agora);
+      if (!ativo) { showWall('pay'); return; }
+    }
 
     // Badge do plano
     const label = document.getElementById('user-label');
     const badge = document.getElementById('plan-badge');
     label.textContent = session.user.email?.split('@')[0] || 'usuário';
-    const dias = validade ? Math.max(0, Math.ceil((validade - agora) / 86400000)) : 0;
+    const validadeBadge = user?.plano_validade ? new Date(user.plano_validade) : null;
+    const dias = validadeBadge ? Math.max(0, Math.ceil((validadeBadge - agora) / 86400000)) : 0;
     if (user.plano === 'trial') {
       badge.textContent = `Trial · ${dias}d`;
       badge.className = 'plan-badge trial';
