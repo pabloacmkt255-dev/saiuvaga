@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Meus Alertas</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-W12FH3ZNDP');
+</script>
+
+<style>
+:root {
+  --g: #1D9E75; --gdk: #0B6B4E; --glt: #E0F5EE;
+  --amb: #F5A623; --ink: #0D110F; --ink2: #2E3830; --ink3: #6B7570;
+  --bg: #F4F6F4; --wh: #fff; --ln: #DDE4DE; --r: 12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ── Logo / Nav ────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 36px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  text-decoration: none;
+}
+.logo-mark {
+  width: 34px; height: 34px;
+  background: var(--g);
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.logo-mark svg { width: 16px; height: 16px; }
+.logo-mark::after {
+  content: '!';
+  position: absolute; top: -5px; right: -5px;
+  width: 13px; height: 13px;
+  background: var(--amb);
+  border-radius: 50%;
+  font-size: 7px; font-weight: 800; color: #412402;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg);
+}
+.user-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--ink3);
+}
+.user-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--g);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+.logout-link {
+  font-size: 12px; color: var(--ink3);
+  text-decoration: none; cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 8px;
+  transition: background .15s;
+}
+.logout-link:hover { background: var(--ln); }
+
+/* ── Page header ───────────────────────────────────────────── */
+.page-head { margin-bottom: 28px; }
+.page-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 26px; font-weight: 800;
+  color: var(--ink); line-height: 1.15;
+  margin-bottom: 6px;
+}
+.page-sub { font-size: 14px; color: var(--ink3); line-height: 1.6; }
+
+/* ── Status bar ────────────────────────────────────────────── */
+.status-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--wh);
+  border: 1px solid var(--ln);
+  border-radius: var(--r);
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  gap: 12px;
+}
+.status-info { display: flex; align-items: center; gap: 10px; }
+.status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 99px; padding: 4px 12px;
+  font-size: 12px; font-weight: 600;
+}
+.status-badge.ativo { background: var(--glt); color: var(--gdk); border: 1px solid rgba(29,158,117,.2); }
+.status-badge.expirado { background: #fef9ee; color: #92400e; border: 1px solid rgba(245,166,35,.3); }
+.status-badge.inativo { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+.status-dias { font-size: 12px; color: var(--ink3); }
+.upgrade-link {
+  font-size: 12px; font-weight: 600;
+  color: var(--g); text-decoration: none;
+  white-space: nowrap;
+}
+.upgrade-link:hover { text-decoration: underline; }
+
+/* ── Card ──────────────────────────────────────────────────── */
+.card {
+  background: var(--wh);
+  border: 1px solid var(--ln);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.card-header {
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid var(--ln);
+  display: flex; align-items: center; gap: 12px;
+}
+.card-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--glt);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.card-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px; font-weight: 700; color: var(--ink);
+}
+.card-desc { font-size: 12px; color: var(--ink3); margin-top: 1px; }
+.card-body { padding: 20px 22px; }
+
+/* ── Fields ────────────────────────────────────────────────── */
+.field { margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+.field label {
+  display: block;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px;
+  color: var(--ink3); margin-bottom: 8px;
+}
+.field input, .field select {
+  width: 100%; height: 48px;
+  border: 1.5px solid var(--ln);
+  border-radius: var(--r);
+  padding: 0 14px;
+  font-size: 14px; font-family: 'Inter', sans-serif;
+  background: var(--bg); color: var(--ink);
+  outline: none; transition: all .2s;
+  appearance: none;
+}
+.field input:focus, .field select:focus {
+  border-color: var(--g);
+  background: var(--wh);
+  box-shadow: 0 0 0 3px rgba(29,158,117,.1);
+}
+.field-hint { font-size: 12px; color: var(--ink3); margin-top: 6px; line-height: 1.5; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── Bairros chips ─────────────────────────────────────────── */
+.bairros-input-wrap {
+  display: flex; gap: 8px;
+}
+.bairros-input-wrap input {
+  flex: 1;
+}
+.add-btn {
+  height: 48px; padding: 0 18px;
+  background: var(--glt);
+  border: 1.5px solid rgba(29,158,117,.3);
+  border-radius: var(--r);
+  color: var(--gdk);
+  font-size: 14px; font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer; white-space: nowrap;
+  transition: all .15s;
+}
+.add-btn:hover { background: var(--g); color: #fff; border-color: var(--g); }
+
+.chips {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  margin-top: 10px; min-height: 0;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--glt);
+  border: 1px solid rgba(29,158,117,.25);
+  border-radius: 99px;
+  padding: 5px 12px;
+  font-size: 13px; font-weight: 500; color: var(--gdk);
+}
+.chip-remove {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: rgba(11,107,78,.15);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--gdk);
+  transition: background .15s; padding: 0; line-height: 1;
+}
+.chip-remove:hover { background: rgba(11,107,78,.3); }
+.chips-empty {
+  font-size: 13px; color: var(--ink3);
+  font-style: italic;
+  padding: 6px 0;
+}
+
+/* ── Horário silêncio ──────────────────────────────────────── */
+.silencio-toggle {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; cursor: pointer;
+}
+.toggle-switch {
+  position: relative; width: 40px; height: 22px;
+  flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--ln); border-radius: 99px;
+  transition: background .2s;
+  cursor: pointer;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform .2s;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--g); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); }
+.toggle-label { font-size: 14px; color: var(--ink); }
+
+.silencio-fields { display: none; }
+.silencio-fields.show { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── Save button ───────────────────────────────────────────── */
+.save-section {
+  position: sticky; bottom: 0;
+  background: linear-gradient(to top, var(--bg) 80%, transparent);
+  padding: 16px 0 0;
+  margin-top: 8px;
+}
+.save-btn {
+  width: 100%; height: 52px;
+  background: var(--g); color: #fff;
+  border: none; border-radius: var(--r);
+  font-size: 15px; font-weight: 600;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all .2s;
+}
+.save-btn:hover { background: var(--gdk); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(29,158,117,.3); }
+.save-btn:active { transform: translateY(0); }
+.save-btn:disabled { opacity: .65; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ─────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: var(--ink2); color: #fff;
+  padding: 12px 24px; border-radius: 99px;
+  font-size: 14px; font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+  opacity: 0; z-index: 1000; white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.success { background: var(--gdk); }
+.toast.error { background: #b91c1c; }
+
+/* ── Loading overlay ───────────────────────────────────────── */
+#loading-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+  z-index: 999;
+}
+.loading-spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--ln);
+  border-top-color: var(--g);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+#loading-overlay p { font-size: 14px; color: var(--ink3); }
+
+/* ── Auth wall ─────────────────────────────────────────────── */
+#auth-wall {
+  display: none;
+  max-width: 400px; margin: 80px auto;
+  text-align: center; padding: 0 20px;
+}
+#auth-wall .icon { font-size: 48px; margin-bottom: 16px; }
+#auth-wall h2 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 22px; font-weight: 800; margin-bottom: 8px;
+}
+#auth-wall p { font-size: 14px; color: var(--ink3); margin-bottom: 24px; }
+.auth-btn {
+  display: inline-block;
+  background: var(--g); color: #fff;
+  padding: 13px 32px; border-radius: var(--r);
+  font-weight: 600; font-size: 15px; text-decoration: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* ── Preview simulado ──────────────────────────────────────── */
+.preview-card {
+  background: var(--wh);
+  border: 1px solid var(--ln);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.preview-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--ln);
+  display: flex; align-items: center; gap: 10px;
+  background: #f9fbf9;
+}
+.preview-title {
+  font-size: 13px; font-weight: 600; color: var(--ink3);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.wpp-preview { background: #ECE5DD; max-width: 280px; border-radius: 12px; overflow: hidden; margin: 16px auto; }
+.wpp-bar { background: #075E54; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+.wpp-av { width: 26px; height: 26px; border-radius: 50%; background: #128C7E; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.wpp-name { font-size: 11px; font-weight: 600; color: #fff; }
+.wpp-sub { font-size: 9px; color: rgba(255,255,255,.65); }
+.wpp-body { padding: 10px 12px; }
+.bubble { background: #fff; border-radius: 0 8px 8px 8px; padding: 9px 11px; font-size: 11px; line-height: 1.55; color: #333; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.bubble-time { font-size: 9px; color: #999; text-align: right; margin-top: 3px; }
+
+@media (max-width: 600px) {
+  .page { padding: 20px 14px 100px; }
+  .card-body { padding: 16px; }
+  .card-header { padding: 16px; }
+  .field-row { grid-template-columns: 1fr; }
+  .topbar { flex-wrap: wrap; gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <p>Carregando seus alertas...</p>
+</div>
+
+<div id="auth-wall">
+  <div class="icon">🔐</div>
+  <h2>Acesso restrito</h2>
+  <p>Você precisa estar logado para configurar seus alertas de imóveis.</p>
+  <a href="saiuvaga-cadastro.html" class="auth-btn">Entrar ou cadastrar →</a>
+</div>
+
+<div id="main-content" style="display:none">
+  <div class="page">
+    <div class="topbar">
+      <a href="saiuvaga-cadastro.html" class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 18 18" fill="none">
+            <circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/>
+            <line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        SaiuVaga
+      </a>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="user-badge">
+          <div class="user-dot"></div>
+          <span id="user-email-label">—</span>
+        </div>
+        <span class="logout-link" onclick="logout()">Sair</span>
+      </div>
+    </div>
+
+    <!-- Status do plano -->
+    <div class="status-bar" id="status-bar">
+      <div class="status-info">
+        <span class="status-badge inativo" id="status-badge">Carregando...</span>
+        <span class="status-dias" id="status-dias"></span>
+      </div>
+      <a href="saiuvaga-pagamento.html" class="upgrade-link" id="upgrade-link" style="display:none">Ver planos →</a>
+    </div>
+
+    <div class="page-head">
+      <div class="page-title">Seus alertas de imóveis 🔔</div>
+      <div class="page-sub">Configure exatamente o que você busca. A gente avisa no WhatsApp em menos de 2 minutos quando surgir uma vaga.</div>
+    </div>
+
+    <!-- Card: Bairros -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📍</div>
+        <div>
+          <div class="card-title">Bairros monitorados</div>
+          <div class="card-desc">Adicione os bairros que você quer acompanhar em São Paulo</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Adicionar bairro</label>
+          <div class="bairros-input-wrap">
+            <input type="text" id="bairro-input" placeholder="Ex: Pinheiros, Vila Madalena, Moema..." autocomplete="off" list="bairros-list">
+            <datalist id="bairros-list">
+              <option value="Pinheiros"><option value="Vila Madalena"><option value="Moema"><option value="Itaim Bibi">
+              <option value="Jardim Paulista"><option value="Brooklin"><option value="Perdizes"><option value="Santa Cecília">
+              <option value="Bela Vista"><option value="Liberdade"><option value="Vila Mariana"><option value="Saúde">
+              <option value="Campo Belo"><option value="Lapa"><option value="Bom Retiro"><option value="Consolação">
+              <option value="República"><option value="Higienópolis"><option value="Paraíso"><option value="Aclimação">
+              <option value="Sumaré"><option value="Vila Pompeia"><option value="Butantã"><option value="Santo André">
+            </datalist>
+            <button class="add-btn" onclick="adicionarBairro()">+ Adicionar</button>
+          </div>
+          <div class="chips" id="chips-container">
+            <span class="chips-empty" id="chips-empty">Nenhum bairro selecionado. Adicione pelo menos um.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card: Filtros -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🎯</div>
+        <div>
+          <div class="card-title">Filtros do imóvel</div>
+          <div class="card-desc">Só te avisamos quando o imóvel bater com seus critérios</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Preço máximo (R$/mês)</label>
+          <input type="number" id="preco-max" placeholder="Ex: 3000" min="0" step="100">
+          <div class="field-hint">Deixe em branco para receber alertas de qualquer preço</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Quartos mínimos</label>
+            <select id="quartos-min">
+              <option value="0">Qualquer</option>
+              <option value="1">1+ quarto</option>
+              <option value="2">2+ quartos</option>
+              <option value="3">3+ quartos</option>
+              <option value="4">4+ quartos</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Área mínima (m²)</label>
+            <input type="number" id="area-min" placeholder="Ex: 40" min="0" step="5">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card: Frequência -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">⚡</div>
+        <div>
+          <div class="card-title">Frequência de alertas</div>
+          <div class="card-desc">Controle quantas mensagens você quer receber por dia</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field">
+          <label>Máximo de alertas por dia</label>
+          <select id="freq-max">
+            <option value="ilimitado">Sem limite — envie tudo</option>
+            <option value="3">Até 3 por dia</option>
+            <option value="5">Até 5 por dia</option>
+            <option value="10">Até 10 por dia</option>
+            <option value="20">Até 20 por dia</option>
+          </select>
+          <div class="field-hint">Recomendamos "Sem limite" para não perder oportunidades</div>
+        </div>
+
+        <!-- Horário de silêncio -->
+        <div class="field" style="margin-bottom: 0">
+          <label>Horário de silêncio</label>
+          <label class="silencio-toggle" for="silencio-toggle">
+            <div class="toggle-switch">
+              <input type="checkbox" id="silencio-toggle" onchange="toggleSilencio(this.checked)">
+              <div class="toggle-track"></div>
+            </div>
+            <span class="toggle-label" id="silencio-label">Não pausar alertas</span>
+          </label>
+          <div class="silencio-fields" id="silencio-fields">
+            <div class="field" style="margin-bottom:0">
+              <label>Das</label>
+              <input type="number" id="silencio-inicio" placeholder="22" min="0" max="23" step="1">
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Até</label>
+              <input type="number" id="silencio-fim" placeholder="8" min="0" max="23" step="1">
+            </div>
+          </div>
+          <div class="field-hint" id="silencio-hint">Entre 22h e 8h, por exemplo, nenhuma mensagem será enviada.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <span style="font-size:16px">📱</span>
+        <span class="preview-title">Como vai chegar no seu WhatsApp</span>
+      </div>
+      <div class="wpp-preview">
+        <div class="wpp-bar">
+          <div class="wpp-av">🏠</div>
+          <div>
+            <div class="wpp-name">SaiuVaga</div>
+            <div class="wpp-sub">online agora</div>
+          </div>
+        </div>
+        <div class="wpp-body">
+          <div class="bubble">
+            🚨 <strong>Nova vaga — <span id="preview-bairro">Pinheiros</span>!</strong><br>
+            Ap 2q · 55m² · R$<span id="preview-preco">1.650</span>/mês<br>
+            🔗 <span style="color:#128C7E">ver imóvel →</span>
+            <div class="bubble-time">agora ✓✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botão salvar -->
+    <div class="save-section">
+      <button class="save-btn" id="save-btn" onclick="salvarAlertas()">
+        <span id="save-text">Salvar configurações</span>
+        <div class="spinner" id="save-spinner"></div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://mlsqebefrjqbeujkxney.supabase.co',
+  'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
+);
+
+const API = 'https://saiuvaga-production.up.railway.app';
+
+let bairros = [];
+let userId = null;
+
+// ── Auth ─────────────────────────────────────────────────────
+async function init() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.user) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      document.getElementById('auth-wall').style.display = 'block';
+      return;
+    }
+    userId = session.user.id;
+    document.getElementById('user-email-label').textContent = session.user.email?.split('@')[0] || 'usuário';
+    await carregarDados(session.user.id);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('auth-wall').style.display = 'block';
+  }
+}
+
+async function carregarDados(uid) {
+  const { data: user } = await sb
+    .from('users')
+    .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max')
+    .eq('id', uid)
+    .maybeSingle();
+
+  if (user) {
+    // Status bar
+    const agora = new Date();
+    const validade = user.plano_validade ? new Date(user.plano_validade) : null;
+    const ativo = user.ativo && validade && validade > agora;
+    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
+
+    const badge = document.getElementById('status-badge');
+    const diasEl = document.getElementById('status-dias');
+    const upgradeEl = document.getElementById('upgrade-link');
+
+    if (ativo && user.plano === 'trial') {
+      badge.textContent = '🎁 Trial ativo';
+      badge.className = 'status-badge ativo';
+      diasEl.textContent = `${diasRestantes} dias restantes`;
+      upgradeEl.style.display = 'inline';
+      upgradeEl.textContent = 'Ver planos pagos →';
+    } else if (ativo) {
+      badge.textContent = `✅ Plano ${user.plano}`;
+      badge.className = 'status-badge ativo';
+      diasEl.textContent = `Válido por mais ${diasRestantes} dias`;
+    } else if (user.trial_usado) {
+      badge.textContent = '⏰ Trial expirado';
+      badge.className = 'status-badge expirado';
+      diasEl.textContent = 'Assine para continuar recebendo alertas';
+      upgradeEl.style.display = 'inline';
+      upgradeEl.textContent = 'Assinar agora →';
+    } else {
+      badge.textContent = 'Sem plano ativo';
+      badge.className = 'status-badge inativo';
+      upgradeEl.style.display = 'inline';
+    }
+
+    // Bairros
+    bairros = Array.isArray(user.alerta_bairros) ? [...user.alerta_bairros] : [];
+    renderChips();
+
+    // Filtros
+    if (user.alerta_preco_max) document.getElementById('preco-max').value = user.alerta_preco_max;
+    if (user.alerta_quartos_min) document.getElementById('quartos-min').value = user.alerta_quartos_min;
+    if (user.alerta_area_min) document.getElementById('area-min').value = user.alerta_area_min;
+    if (user.alerta_freq_max) document.getElementById('freq-max').value = user.alerta_freq_max;
+
+    // Silêncio
+    const temSilencio = user.alerta_silencio_inicio != null && user.alerta_silencio_fim != null;
+    if (temSilencio) {
+      document.getElementById('silencio-toggle').checked = true;
+      toggleSilencio(true);
+      document.getElementById('silencio-inicio').value = user.alerta_silencio_inicio;
+      document.getElementById('silencio-fim').value = user.alerta_silencio_fim;
+    }
+
+    atualizarPreview();
+  }
+
+  document.getElementById('loading-overlay').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+}
+
+// ── Bairros ──────────────────────────────────────────────────
+function adicionarBairro() {
+  const input = document.getElementById('bairro-input');
+  const val = input.value.trim();
+  if (!val) return;
+
+  const normalizado = val.replace(/\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  if (!bairros.includes(normalizado) && bairros.length < 20) {
+    bairros.push(normalizado);
+    renderChips();
+    atualizarPreview();
+  }
+  input.value = '';
+  input.focus();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('bairro-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarBairro(); }
+  });
+});
+
+function removerBairro(idx) {
+  bairros.splice(idx, 1);
+  renderChips();
+  atualizarPreview();
+}
+
+function renderChips() {
+  const container = document.getElementById('chips-container');
+  const empty = document.getElementById('chips-empty');
+  container.innerHTML = '';
+
+  if (bairros.length === 0) {
+    container.appendChild(Object.assign(document.createElement('span'), {
+      className: 'chips-empty',
+      id: 'chips-empty',
+      textContent: 'Nenhum bairro selecionado. Adicione pelo menos um.',
+    }));
+    return;
+  }
+
+  bairros.forEach((b, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${b} <button class="chip-remove" onclick="removerBairro(${i})" title="Remover">×</button>`;
+    container.appendChild(chip);
+  });
+}
+
+// ── Silêncio ─────────────────────────────────────────────────
+function toggleSilencio(on) {
+  const fields = document.getElementById('silencio-fields');
+  const label = document.getElementById('silencio-label');
+  const hint = document.getElementById('silencio-hint');
+  fields.className = on ? 'silencio-fields show' : 'silencio-fields';
+  label.textContent = on ? 'Pausar alertas no período abaixo' : 'Não pausar alertas';
+  hint.style.display = on ? 'none' : 'block';
+}
+
+// ── Preview ──────────────────────────────────────────────────
+function atualizarPreview() {
+  const bairro = bairros[0] || 'Pinheiros';
+  const preco = document.getElementById('preco-max').value || '1.650';
+  document.getElementById('preview-bairro').textContent = bairro;
+  document.getElementById('preview-preco').textContent = Number(preco).toLocaleString('pt-BR') || '1.650';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('preco-max').addEventListener('input', atualizarPreview);
+});
+
+// ── Salvar ───────────────────────────────────────────────────
+async function salvarAlertas() {
+  if (!userId) return;
+  if (bairros.length === 0) {
+    showToast('Adicione pelo menos um bairro antes de salvar.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('save-btn');
+  const txt = document.getElementById('save-text');
+  const spin = document.getElementById('save-spinner');
+  btn.disabled = true;
+  txt.textContent = 'Salvando...';
+  spin.style.display = 'block';
+
+  const silencioOn = document.getElementById('silencio-toggle').checked;
+  const silencioInicio = silencioOn ? parseInt(document.getElementById('silencio-inicio').value) || null : null;
+  const silencioFim    = silencioOn ? parseInt(document.getElementById('silencio-fim').value)    || null : null;
+
+  const payload = {
+    alerta_bairros:         bairros,
+    alerta_preco_max:       parseInt(document.getElementById('preco-max').value) || null,
+    alerta_quartos_min:     parseInt(document.getElementById('quartos-min').value) || 0,
+    alerta_area_min:        parseInt(document.getElementById('area-min').value) || 0,
+    alerta_freq_max:        document.getElementById('freq-max').value,
+    alerta_silencio_inicio: silencioInicio,
+    alerta_silencio_fim:    silencioFim,
+  };
+
+  try {
+    const { error } = await sb.from('users').update(payload).eq('id', userId);
+    if (error) throw error;
+    showToast('Alertas salvos! Você será avisado assim que surgir uma vaga. 🏠', 'success');
+  } catch (e) {
+    showToast('Erro ao salvar: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    txt.textContent = 'Salvar configurações';
+    spin.style.display = 'none';
+  }
+}
+
+// ── Logout ───────────────────────────────────────────────────
+async function logout() {
+  await sb.auth.signOut();
+  window.location.href = 'saiuvaga-cadastro.html';
+}
+
+// ── Toast ────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { el.classList.add('show'); });
+  });
+  toastTimer = setTimeout(() => { el.classList.remove('show'); }, 3800);
+}
+
+init();
+</script>
+</body>
+</html>
