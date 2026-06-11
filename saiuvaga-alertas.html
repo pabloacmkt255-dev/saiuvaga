@@ -596,13 +596,15 @@ let userId = null;
 
 // ── Auth ─────────────────────────────────────────────────────
 async function init() {
-  try {
-    // Tenta getSession com timeout de 5s
-    let uid = null;
+  // Tenta sessionStorage primeiro (salvo pela busca ao fazer login)
+  let uid = sessionStorage.getItem('sv_uid');
+
+  if (!uid) {
+    // Sem uid no sessionStorage — tenta getSession com timeout curto
     try {
       const sessionResult = await Promise.race([
         sb.auth.getSession(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        new Promise(resolve => setTimeout(() => resolve(null), 4000))
       ]);
       const session = sessionResult?.data?.session;
       if (session?.user) {
@@ -611,24 +613,22 @@ async function init() {
         document.getElementById('user-email-label').textContent = session.user.email?.split('@')[0] || 'usuário';
       }
     } catch(e) {
-      console.warn('getSession timeout, tentando sessionStorage...');
+      console.warn('getSession falhou:', e);
     }
+  }
 
-    // Fallback: usa user_id salvo pela página de busca
-    if (!uid) {
-      uid = sessionStorage.getItem('sv_uid');
-    }
+  if (!uid) {
+    // Sem sessão — redireciona para busca (que faz login)
+    window.location.href = 'saiuvaga-busca.html';
+    return;
+  }
 
-    if (!uid) {
-      window.location.href = 'saiuvaga-cadastro.html';
-      return;
-    }
-
-    userId = uid;
+  userId = uid;
+  try {
     await carregarDados(uid);
-  } catch (e) {
+  } catch(e) {
     console.error(e);
-    window.location.href = 'saiuvaga-cadastro.html';
+    document.getElementById('loading-overlay').style.display = 'none';
   }
 }
 
