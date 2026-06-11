@@ -683,8 +683,8 @@ async function buscarVivaRealDireto(bairro) {
               const listings = state?.results?.listings || [];
               listings.forEach(l => {
                 const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-                const link = l?.link?.href ? \`https://www.vivareal.com.br\${l.link.href}\` : '';
-                const titulo = l?.listing?.title || \`Imovel VivaReal - \${bairro}\`;
+                const link = l?.link?.href ? `https://www.vivareal.com.br${l.link.href}` : '';
+                const titulo = l?.listing?.title || `Imovel VivaReal - ${bairro}`;
                 if (preco > 0 && link.length > 20) {
                   imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'VivaReal', link });
                 }
@@ -695,7 +695,7 @@ async function buscarVivaRealDireto(bairro) {
       });
       if (imoveis.length > 0) return imoveis;
     } catch (e) {
-      console.log(\`   ⚠️  VivaReal ScraperAPI falhou para \${bairro}: \${e.message?.slice(0, 50)}\`);
+      console.log(`   ⚠️  VivaReal ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
     }
   }
   return [];
