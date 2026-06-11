@@ -37,24 +37,31 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   let phone = telefone.replace(/\D/g, '');
   if (!phone.startsWith('55')) phone = '55' + phone;
 
-  try {
-    const res = await axios.post(
-      `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`,
-      { phone, message: mensagem },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Client-Token': ZAPI_CLIENT_TOKEN
+  const MAX_TENTATIVAS = 2;
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    try {
+      const res = await axios.post(
+        `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`,
+        { phone, message: mensagem },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Client-Token': ZAPI_CLIENT_TOKEN
+          },
+          timeout: 15000,
         }
+      );
+      console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
+      return true;
+    } catch (err) {
+      const detail = err.response?.data?.message || err.message;
+      console.error(`   _ Erro Z-API (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${detail}`);
+      if (tentativa < MAX_TENTATIVAS) {
+        await new Promise(r => setTimeout(r, 3000));
       }
-    );
-    console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
-    return true;
-  } catch (err) {
-    const detail = err.response?.data?.message || err.message;
-    console.error(`   _ Erro Z-API: ${detail}`);
-    return false;
+    }
   }
+  return false;
 }
 
 // -- Servidor Express ----------------------------------------
