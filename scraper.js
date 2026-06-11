@@ -1022,30 +1022,65 @@ function toSlug(str) {
     .replace(/[^a-z0-9-]/g, '');
 }
 
-// Busca ZAP direto — sem proxy, sem custo. Apify só como backup emergencial.
+// Busca ZAP direto — tenta VivaReal glue-api primeiro (mais permissiva com IPs de servidor),
+// depois ZAP glue-api. Apify só como backup emergencial.
 async function buscarZapDireto(bairro) {
   const slug = toSlug(bairro);
-  // User-Agents rotativos para reduzir chance de bloqueio
+  const PAGE_SIZE = 48;
+
   const UAS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   ];
   const ua = UAS[Math.floor(Math.random() * UAS.length)];
-  const headers = {
-    'User-Agent': ua,
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-    'x-domain': 'www.zapimoveis.com.br',
-    'Origin': 'https://www.zapimoveis.com.br',
-    'Referer': 'https://www.zapimoveis.com.br/',
-  };
-  const PAGE_SIZE = 48;
-  const todos = [];
 
-  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+  // ── Tentativa 1: VivaReal glue-api (mesma infra do ZAP, IP de servidor aceito com mais frequência)
   try {
-    const { data } = await axios.get(url, { headers, timeout: 30000 });
+    const headersVR = {
+      'User-Agent': ua,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      'x-domain': 'www.vivareal.com.br',
+      'Origin': 'https://www.vivareal.com.br',
+      'Referer': 'https://www.vivareal.com.br/',
+    };
+    const urlVR = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+    const { data } = await axios.get(urlVR, { headers: headersVR, timeout: 30000 });
+    const listings = data?.search?.result?.listings || [];
+    const imoveis = listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel - ${bairro}`,
+        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'VivaReal',
+        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+    if (imoveis.length > 0) {
+      console.log(`   ✅ VivaReal glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
+      return imoveis;
+    }
+  } catch (e) {
+    console.log(`   __ VivaReal glue-api falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+  }
+
+  // ── Tentativa 2: ZAP glue-api com headers atualizados (Chrome 125)
+  try {
+    const headersZAP = {
+      'User-Agent': ua,
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'x-domain': 'www.zapimoveis.com.br',
+      'Origin': 'https://www.zapimoveis.com.br',
+      'Referer': 'https://www.zapimoveis.com.br/',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-site',
+    };
+    const urlZAP = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+    const { data } = await axios.get(urlZAP, { headers: headersZAP, timeout: 30000 });
     const listings = data?.search?.result?.listings || [];
     const imoveis = listings
       .filter(i => i?.listing?.pricingInfos?.[0]?.price)
@@ -1056,26 +1091,59 @@ async function buscarZapDireto(bairro) {
         link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
       }))
       .filter(i => i.preco > 0 && i.link.length > 30);
-    todos.push(...imoveis);
+    if (imoveis.length > 0) {
+      console.log(`   ✅ ZAP glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
+      return imoveis;
+    }
   } catch (e) {
-    throw e; // propaga para o chamador decidir o fallback
+    // propaga para o chamador acionar o fallback de proxy
+    throw e;
   }
-  return todos;
+
+  throw new Error('Nenhum resultado nas glue-apis (VivaReal e ZAP)');
 }
 
-// Fallback via proxy pago (ScraperAPI/BrightData) — reserva, raramente usado
+// Fallback via proxy pago — tenta VivaReal glue-api primeiro, depois ZAP
 async function buscarZapViaProxy(bairro) {
   const slug = toSlug(bairro);
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  const PAGE_SIZE = 48;
+
+  // Tenta VivaReal via proxy
+  try {
+    const headersVR = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'x-domain': 'www.vivareal.com.br',
+      'Origin': 'https://www.vivareal.com.br',
+      'Referer': 'https://www.vivareal.com.br/',
+    };
+    const urlVR = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+    const { data } = await axiosProxy(urlVR, headersVR, 45000);
+    const listings = data?.search?.result?.listings || [];
+    const imoveis = listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel - ${bairro}`,
+        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'VivaReal',
+        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+    if (imoveis.length > 0) return imoveis;
+  } catch (e) {
+    console.log(`   __ Proxy VivaReal glue-api falhou: ${e.message?.slice(0, 50)}`);
+  }
+
+  // Tenta ZAP via proxy
+  const headersZAP = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'x-domain': 'www.zapimoveis.com.br',
     'Origin': 'https://www.zapimoveis.com.br',
     'Referer': 'https://www.zapimoveis.com.br/',
   };
-  const PAGE_SIZE = 48;
-  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
-  const { data } = await axiosProxy(url, headers, 45000);
+  const urlZAP = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+  const { data } = await axiosProxy(urlZAP, headersZAP, 45000);
   const listings = data?.search?.result?.listings || [];
   return listings
     .filter(i => i?.listing?.pricingInfos?.[0]?.price)
