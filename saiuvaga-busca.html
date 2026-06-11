@@ -366,7 +366,11 @@ const POR_PAGINA = 12;
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   try {
-    const { data: { session } } = await sb.auth.getSession();
+    const sessionResult = await Promise.race([
+      sb.auth.getSession(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]);
+    const session = sessionResult?.data?.session;
     if (!session?.user) { window.location.href = 'saiuvaga-cadastro.html'; return; }
 
     userId = session.user.id;
