@@ -434,7 +434,7 @@ async function entrar() {
   const { data: user } = await sb.from('users').select('ativo, nome').eq('id', data.user.id).maybeSingle();
   if (user?.ativo) {
     showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`,'Seus alertas estão ativos. Redirecionando...');
-    setTimeout(() => window.location.href = 'dashboard.html', 1500);
+    setTimeout(() => window.location.href = 'saiuvaga-busca.html', 1500);
   } else {
     showSuccess('Login feito! ✓','Ative seu plano para começar a receber alertas de imóveis.');
     setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
