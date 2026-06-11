@@ -614,6 +614,22 @@ async function init() {
 }
 
 async function carregarDados(uid) {
+  // Usa backend (service_key) para evitar bloqueio de RLS no status
+  let statusAtivo = false;
+  let statusDias = 0;
+  let statusPlano = 'trial';
+  let statusTrialUsado = false;
+  try {
+    const statusRes = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${uid}`);
+    const status = await statusRes.json();
+    const agora = new Date();
+    const validade = status.validade ? new Date(status.validade) : null;
+    statusAtivo = !!(status.ativo && validade && validade > agora);
+    statusDias = status.dias_restantes || 0;
+    statusPlano = status.plano || 'trial';
+    statusTrialUsado = status.trial_usado || false;
+  } catch(e) { console.warn('status API falhou:', e); }
+
   const { data: user } = await sb
     .from('users')
     .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max')
@@ -621,17 +637,19 @@ async function carregarDados(uid) {
     .maybeSingle();
 
   if (user) {
-    // Status bar
+    // Status bar — usa dados do backend (confiáveis) para status, Supabase para preferências
     const agora = new Date();
     const validade = user.plano_validade ? new Date(user.plano_validade) : null;
-    const ativo = user.ativo && validade && validade > agora;
+    const ativo = statusAtivo || !!(user.ativo && validade && validade > agora);
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
     const badge = document.getElementById('status-badge');
     const diasEl = document.getElementById('status-dias');
     const upgradeEl = document.getElementById('upgrade-link');
 
-    if (ativo && user.plano === 'trial') {
+    const diasRestantes = statusDias || (validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0);
+    const planoAtual = statusPlano || user.plano;
+    if (ativo && planoAtual === 'trial') {
       badge.textContent = '🎁 Trial ativo';
       badge.className = 'status-badge ativo';
       diasEl.textContent = `${diasRestantes} dias restantes`;
