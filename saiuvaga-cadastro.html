@@ -277,10 +277,7 @@ sb.auth.getSession().then(async ({ data }) => {
     const res = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${user.id}`);
     const status = await res.json();
     if (status.ativo) {
-      document.getElementById('main-form').style.display = 'none';
-      document.getElementById('success-view').style.display = 'block';
-      document.getElementById('suc-title').textContent = status.em_trial ? `Trial ativo — ${status.dias_restantes} dias restantes 🎉` : 'Plano ativo ✅';
-      document.getElementById('suc-sub').textContent = status.em_trial ? 'Seus alertas estão configurados. Você receberá notificações no WhatsApp!' : 'Seu plano está ativo. Continue recebendo alertas no WhatsApp!';
+      window.location.href = 'saiuvaga-busca.html';
     } else if (status.trial_usado) {
       window.location.href = 'saiuvaga-pagamento.html';
     }
