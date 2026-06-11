@@ -805,6 +805,41 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
+// ─── SISTEMA DE RODÍZIO DE PROVEDORES ────────────────────────────────────────
+// Distribui chamadas entre Apify, ScraperAPI e BrightData para economizar créditos
+// Estado persiste em memória — reseta ao reiniciar o servidor
+const _providerState = {
+  zap:      { idx: 0, fails: { apify: 0, scraper: 0, bright: 0 } },
+  olx:      { idx: 0, fails: { apify: 0, scraper: 0, bright: 0 } },
+  vivareal: { idx: 0, fails: { apify: 0, scraper: 0, bright: 0 } },
+};
+const PROVIDERS = ['apify', 'scraper', 'bright'];
+
+function nextProvider(portal) {
+  const state = _providerState[portal];
+  // Avança para o próximo provedor disponível (que não falhou 3x seguidas)
+  for (let i = 0; i < PROVIDERS.length; i++) {
+    const idx = (state.idx + i) % PROVIDERS.length;
+    const p = PROVIDERS[idx];
+    if (state.fails[p] < 3) {
+      state.idx = (idx + 1) % PROVIDERS.length; // próxima chamada começa no seguinte
+      return p;
+    }
+  }
+  // Todos falharam — reseta e tenta apify
+  state.fails = { apify: 0, scraper: 0, bright: 0 };
+  state.idx = 1;
+  return 'apify';
+}
+
+function markSuccess(portal, provider) {
+  _providerState[portal].fails[provider] = 0;
+}
+
+function markFail(portal, provider) {
+  _providerState[portal].fails[provider]++;
+}
+
 // ─── VIVA REAL via Apify dedicado + ScraperAPI dedicado ──────────────────────
 // ─── VIVA REAL via Apify (token principal) + ScraperAPI (fallback) ───────────
 async function buscarVivaRealApify(bairro) {
@@ -917,16 +952,51 @@ async function buscarVivaRealScraperAPI(bairro) {
   }
 }
 
-async function buscarVivaRealDireto(bairro) {
-  // 1) Apify (token principal)
-  if (process.env.APIFY_TOKEN) {
-    const result = await buscarVivaRealApify(bairro);
-    if (result.length > 0) return result;
+async function buscarVivaRealBrightData(bairro) {
+  const key = process.env.BRIGHTDATA_KEY;
+  if (!key) return [];
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+  try {
+    const proxyUrl = `https://proxy.brightdata.com/dca/request?url=${encodeURIComponent(targetUrl)}&country=br`;
+    const { data: html } = await axios.get(proxyUrl, {
+      headers: { 'Authorization': `Bearer ${key}`, 'Accept-Language': 'pt-BR' },
+      timeout: 45000,
+    });
+    const $ = cheerio.load(html);
+    const nextData = $('script#__NEXT_DATA__').html();
+    if (!nextData) return [];
+    const parsed = JSON.parse(nextData);
+    const listings = parsed?.props?.pageProps?.initialState?.results?.listings || parsed?.props?.pageProps?.results?.listings || [];
+    return listings
+      .filter(l => parseInt(l?.listing?.pricingInfos?.[0]?.price) > 0)
+      .map(l => ({
+        titulo: l?.listing?.title || `Imóvel VivaReal - ${bairro}`,
+        preco: parseInt(l?.listing?.pricingInfos?.[0]?.price),
+        bairro, tipo: 'residencial', portal: 'VivaReal',
+        link: `https://www.vivareal.com.br${l?.link?.href || ''}`,
+      })).filter(i => i.link.length > 20);
+  } catch(e) {
+    console.log(`   __ VivaReal BrightData falhou: ${e.message?.slice(0,50)}`);
+    return [];
   }
-  // 2) ScraperAPI (token principal)
-  if (process.env.SCRAPERAPI_KEY) {
-    const result = await buscarVivaRealScraperAPI(bairro);
-    if (result.length > 0) return result;
+}
+
+async function buscarVivaRealDireto(bairro) {
+  const provider = nextProvider('vivareal');
+  console.log(`   🔄 VivaReal provedor: ${provider}`);
+  const runners = {
+    apify:   async () => process.env.APIFY_TOKEN ? buscarVivaRealApify(bairro) : [],
+    scraper: async () => process.env.SCRAPERAPI_KEY ? buscarVivaRealScraperAPI(bairro) : [],
+    bright:  async () => buscarVivaRealBrightData(bairro),
+  };
+  const order = [provider, ...PROVIDERS.filter(p => p !== provider)];
+  for (const p of order) {
+    try {
+      const result = await runners[p]();
+      if (result?.length > 0) { markSuccess('vivareal', p); return result; }
+      markFail('vivareal', p);
+    } catch(e) { markFail('vivareal', p); }
   }
   return [];
 }
@@ -1020,13 +1090,48 @@ async function buscarOLXScraperAPI(bairro) {
 }
 
 // Orquestra OLX: Apify primeiro, ScraperAPI como fallback
-async function buscarOLXHtml(bairro) {
-  if (process.env.APIFY_TOKEN) {
-    const result = await buscarOLXApify(bairro);
-    if (result.length > 0) return result;
+async function buscarOLXBrightData(bairro) {
+  const key = process.env.BRIGHTDATA_KEY;
+  if (!key) return [];
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
+  try {
+    const proxyUrl = `https://proxy.brightdata.com/dca/request?url=${encodeURIComponent(targetUrl)}&country=br`;
+    const { data: html } = await axios.get(proxyUrl, {
+      headers: { 'Accept-Language': 'pt-BR' },
+      auth: { username: 'brd-customer', password: key },
+      timeout: 45000,
+    });
+    const $ = cheerio.load(html);
+    const imoveis = [];
+    $('li[data-lurker-detail="main_ad"]').each((_, el) => {
+      const preco = parseInt($(el).find('[data-ds-component="DS-Text"]').first().text().replace(/\D/g,'')) || 0;
+      const link = $(el).find('a').attr('href') || '';
+      const titulo = $(el).find('h2,h3').first().text().trim() || `Imóvel OLX - ${bairro}`;
+      if (preco > 0 && link.includes('olx')) imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+    });
+    return imoveis;
+  } catch(e) {
+    console.log(`   __ OLX BrightData falhou: ${e.message?.slice(0,50)}`);
+    return [];
   }
-  if (process.env.SCRAPERAPI_KEY) {
-    return buscarOLXScraperAPI(bairro);
+}
+
+async function buscarOLXHtml(bairro) {
+  const provider = nextProvider('olx');
+  console.log(`   🔄 OLX provedor: ${provider}`);
+  const runners = {
+    apify:   async () => process.env.APIFY_TOKEN ? buscarOLXApify(bairro) : [],
+    scraper: async () => process.env.SCRAPERAPI_KEY ? buscarOLXScraperAPI(bairro) : [],
+    bright:  async () => buscarOLXBrightData(bairro),
+  };
+  const order = [provider, ...PROVIDERS.filter(p => p !== provider)];
+  for (const p of order) {
+    try {
+      const result = await runners[p]();
+      if (result?.length > 0) { markSuccess('olx', p); return result; }
+      markFail('olx', p);
+    } catch(e) { markFail('olx', p); }
   }
   return [];
 }
@@ -1206,18 +1311,32 @@ async function buscarOLX(bairro, region) {
     ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
   ];
 
-  // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
+  // ZAP rodízio — distribui entre Apify, ScraperAPI, BrightData
   let apifyZapCount = 0;
-  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN)) {
-    try {
-      const apifyResult = await buscarViaApify(bairro);
-      if (apifyResult && apifyResult.length > 0) {
-        todos.push(...apifyResult);
-        apifyZapCount = apifyResult.length;
-        console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
+  if (todos.length === 0) {
+    const zapProvider = nextProvider('zap');
+    console.log(`   🔄 ZAP provedor: ${zapProvider}`);
+    const zapRunners = {
+      apify:   async () => (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN) ? buscarViaApify(bairro) : [],
+      scraper: async () => buscarZapViaProxy(bairro),
+      bright:  async () => buscarZapViaProxy(bairro), // BrightData via axiosProxy existente
+    };
+    const zapOrder = [zapProvider, ...PROVIDERS.filter(p => p !== zapProvider)];
+    for (const p of zapOrder) {
+      try {
+        const result = await zapRunners[p]();
+        if (result?.length > 0) {
+          todos.push(...result);
+          apifyZapCount = result.length;
+          markSuccess('zap', p);
+          console.log(`   ✅ ZAP ${p} OK para ${bairro}: ${result.length} imóveis`);
+          break;
+        }
+        markFail('zap', p);
+      } catch(e) {
+        markFail('zap', p);
+        console.log(`   __ ZAP ${p} falhou: ${e.message?.slice(0,50)}`);
       }
-    } catch (e) {
-      console.log(`   __ Apify ZAP falhou: ${e.message?.slice(0, 50)}`);
     }
   }
 
