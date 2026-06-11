@@ -133,6 +133,93 @@ app.get('/webhook', (req, res) => {
 });
 
 // -- Funcao de processar mensagem (chatbot Groq) --------------
+// ─── Extrai intenção de busca via Groq ───────────────────────────────────────
+async function extrairIntencaoBusca(text) {
+  try {
+    const resposta = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.1-8b-instant',
+        messages: [{
+          role: 'user',
+          content: `Analise a mensagem abaixo e extraia a intenção de busca de imóvel para aluguel em São Paulo.
+Responda APENAS com um JSON válido, sem texto adicional:
+{
+  "ehBusca": true/false,
+  "bairros": ["bairro1", "bairro2"],
+  "precoMax": 0,
+  "quartos": 0,
+  "tipo": ""
+}
+Regras:
+- ehBusca = true se a pessoa quer buscar/encontrar imóvel para alugar agora
+- bairros: lista de bairros mencionados (vazio se não mencionou)
+- precoMax: valor máximo em reais (0 se não mencionou)
+- quartos: número mínimo de quartos (0 se não mencionou)
+- tipo: "apartamento", "casa", "kitnet" ou "" se não especificou
+- Se for só uma pergunta geral sobre o produto/preço/como funciona, ehBusca = false
+
+Mensagem: "${text.replace(/"/g, '\'')}"`,
+        }],
+        max_tokens: 150,
+        temperature: 0.1,
+      },
+      { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` } }
+    );
+    const raw = resposta.data?.choices?.[0]?.message?.content || '{}';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    return { ehBusca: false };
+  }
+}
+
+// ─── Busca imóveis no banco conforme intenção ─────────────────────────────────
+async function buscarImoveisParaUsuario(intencao) {
+  try {
+    let query = supabase
+      .from('imoveis')
+      .select('titulo, preco, bairro, tipo, portal, link, encontrado_em')
+      .order('encontrado_em', { ascending: false })
+      .limit(5);
+
+    if (intencao.precoMax > 0) query = query.lte('preco', intencao.precoMax);
+    if (intencao.tipo) query = query.ilike('tipo', `%${intencao.tipo}%`);
+
+    // Se mencionou bairros, busca por qualquer um deles
+    if (intencao.bairros && intencao.bairros.length > 0) {
+      const filtros = intencao.bairros.map(b => `bairro.ilike.%${b}%`).join(',');
+      query = query.or(filtros);
+    }
+
+    const { data } = await query;
+    return data || [];
+  } catch (e) {
+    console.error('Erro busca imóveis:', e.message);
+    return [];
+  }
+}
+
+// ─── Formata lista de imóveis para WhatsApp ───────────────────────────────────
+function formatarImoveisWpp(imoveis, intencao) {
+  if (imoveis.length === 0) {
+    const bairros = intencao.bairros?.join(', ') || 'São Paulo';
+    return `🔍 Não encontrei imóveis disponíveis agora para ${bairros} com esses critérios.\n\nNossa base é atualizada a cada 4h. Configure seus alertas em saiuvaga.com.br/saiuvaga-alertas.html para ser avisado assim que surgir uma vaga! 🔔`;
+  }
+
+  let msg = `🏠 *Encontrei ${imoveis.length} imóvel(is) disponíveis:*\n\n`;
+  imoveis.forEach((im, i) => {
+    const preco = im.preco ? `R$${Number(im.preco).toLocaleString('pt-BR')}/mês` : 'Consulte';
+    msg += `*${i + 1}. ${im.bairro || 'SP'}*\n`;
+    msg += `${im.titulo || 'Imóvel disponível'}\n`;
+    msg += `💰 ${preco} · ${im.portal}\n`;
+    msg += `🔗 ${im.link}\n\n`;
+  });
+  msg += `_Quer receber novos imóveis assim que saírem? Configure seus alertas em saiuvaga.com.br/saiuvaga-alertas.html_`;
+  return msg;
+}
+
+// ─── Processa mensagem recebida no WhatsApp ───────────────────────────────────
 async function processarMensagem(phone, text) {
   try {
     const numero = phone.replace(/\D/g, '').replace(/^55/, '');
@@ -147,6 +234,19 @@ async function processarMensagem(phone, text) {
     const ativo = user?.ativo && validade && validade > agora;
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
+    // ── Detecta se é busca de imóvel ──────────────────────────────────────────
+    const intencao = await extrairIntencaoBusca(text);
+
+    if (intencao.ehBusca) {
+      // Usuário quer buscar imóvel agora — faz busca real no banco
+      const imoveis = await buscarImoveisParaUsuario(intencao);
+      const mensagem = formatarImoveisWpp(imoveis, intencao);
+      await enviarWhatsApp(phone, null, mensagem);
+      console.log(`   🔍 Busca via WPP: ${imoveis.length} resultado(s) → ${phone}`);
+      return;
+    }
+
+    // ── Resposta geral via Groq ───────────────────────────────────────────────
     let contextoUsuario = 'Usuario nao cadastrado no SaiuVaga.';
     if (user) {
       if (ativo && user.plano === 'trial') {
@@ -170,6 +270,7 @@ INFORMACOES DO PRODUTO:
 - Plano Trimestral: R$38/3 meses (1 mes gratis)
 - Site: saiuvaga.com.br
 - Para cadastrar: saiuvaga.com.br/saiuvaga-cadastro.html
+- Configurar alertas: saiuvaga.com.br/saiuvaga-alertas.html
 
 CONTEXTO DO USUARIO ATUAL:
 ${contextoUsuario}
@@ -183,6 +284,7 @@ REGRAS:
 - Se perguntarem sobre preco, sempre mencione o trial gratuito primeiro
 - Se o trial expirou, incentive o pagamento gentilmente
 - Nunca seja robotico - seja humano e empatico
+- Se o usuario quiser buscar imoveis, sugira que ele configure os alertas no link acima
 
 MENSAGEM DO USUARIO:
 ${text}
@@ -525,9 +627,14 @@ app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
 const supabaseAdmin = require('@supabase/supabase-js')
   .createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'saiuvaga2024admin';
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) console.warn('⚠️  ADMIN_SECRET nao configurado — rotas /api/admin desativadas');
 
 function verificarAdmin(req, res) {
+  if (!ADMIN_SECRET) {
+    res.status(503).json({ erro: 'Admin nao configurado' });
+    return false;
+  }
   const auth = req.headers['authorization'] || '';
   const senha = auth.replace('Bearer ', '').trim();
   if (senha !== ADMIN_SECRET) {
@@ -974,8 +1081,6 @@ async function buscarZapViaProxy(bairro) {
     .filter(i => i.preco > 0 && i.link.length > 30);
 }
 
-// VivaReal desativado (DNS descontinuado desde 2024)
-async function buscarVivaReal(bairro) { return []; }
 
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
@@ -1016,6 +1121,9 @@ async function buscarOLX(bairro, region) {
       console.log(`   __ Apify também falhou: ${e.message?.slice(0, 50)}`);
     }
   }
+
+  // Diagnóstico por fonte
+  console.log(`   📊 Fontes brutas: ZAP=${zapDireto.status==='fulfilled'?zapDireto.value?.length||0:'ERR'} VivaReal=${vivaReal.status==='fulfilled'?vivaReal.value?.length||0:'ERR'} OLX=${olxHtml.status==='fulfilled'?olxHtml.value?.length||0:'ERR'} ML=${mercadoLivre.status==='fulfilled'?mercadoLivre.value?.length||0:'ERR'}`);
 
   // Deduplica por link
   const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
@@ -1058,7 +1166,7 @@ async function verificarAlertas() {
 
     // Horário de silêncio
     if (usuario.alerta_silencio_inicio && usuario.alerta_silencio_fim) {
-      const hora = new Date().getHours();
+      const hora = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours(); // BRT = UTC-3
       const ini  = parseInt(usuario.alerta_silencio_inicio);
       const fim  = parseInt(usuario.alerta_silencio_fim);
       const emSilencio = ini > fim
@@ -1089,7 +1197,7 @@ async function verificarAlertas() {
         .select('*')
         .ilike('bairro', `%${bairro}%`)
         .lte('preco', precoMax)
-        .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString());
+        .gte('encontrado_em', new Date(Date.now() - 300 * 60 * 1000).toISOString()); // 5h — cobre ciclo de 4h com folga
 
       if (!matches || matches.length === 0) continue;
 
@@ -1097,6 +1205,8 @@ async function verificarAlertas() {
         // Filtros adicionais
         if (quartosMin > 0 && (imovel.quartos || 0) < quartosMin) continue;
         if (areaMin   > 0 && (imovel.area    || 0) < areaMin)    continue;
+        const tipos = usuario.alerta_tipos || [];
+        if (tipos.length > 0 && imovel.tipo && !tipos.includes(imovel.tipo)) continue;
 
         // Evita reenvio
         const { data: jaEnviado } = await supabase
