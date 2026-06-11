@@ -660,39 +660,45 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
-// ─── VIVA REAL (mesma infra do ZAP, grátis) ───────────────────────────────────
+// ─── VIVA REAL via ScraperAPI (DNS direto descontinuado) ─────────────────────
 async function buscarVivaRealDireto(bairro) {
+  const scraperKey = process.env.SCRAPERAPI_KEY;
   const slug = toSlug(bairro);
-  const UAS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-  ];
-  const ua = UAS[Math.floor(Math.random() * UAS.length)];
-  const headers = {
-    'User-Agent': ua,
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'pt-BR,pt;q=0.9',
-    'x-domain': 'www.vivareal.com.br',
-    'Origin': 'https://www.vivareal.com.br',
-    'Referer': 'https://www.vivareal.com.br/',
-  };
-  const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
-  try {
-    const { data } = await axios.get(url, { headers, timeout: 30000 });
-    const listings = data?.search?.result?.listings || [];
-    return listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'VivaReal',
-        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
-  } catch (e) {
-    console.log(`   ⚠️  VivaReal direto falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
-    return [];
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sao-paulo/sao-paulo/bairros/${slug}/?__vt=t`;
+  // Tenta via ScraperAPI para contornar o bloqueio de geo
+  if (scraperKey) {
+    try {
+      const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
+      const { data: html } = await axios.get(proxyUrl, { timeout: 60000 });
+      const $ = cheerio.load(html);
+      const imoveis = [];
+      // VivaReal injeta dados em window.__INITIAL_STATE__
+      $('script').each((_, el) => {
+        const src = $(el).html() || '';
+        if (src.includes('__INITIAL_STATE__')) {
+          try {
+            const match = src.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s);
+            if (match) {
+              const state = JSON.parse(match[1]);
+              const listings = state?.results?.listings || [];
+              listings.forEach(l => {
+                const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
+                const link = l?.link?.href ? \`https://www.vivareal.com.br\${l.link.href}\` : '';
+                const titulo = l?.listing?.title || \`Imovel VivaReal - \${bairro}\`;
+                if (preco > 0 && link.length > 20) {
+                  imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'VivaReal', link });
+                }
+              });
+            }
+          } catch(pe) {}
+        }
+      });
+      if (imoveis.length > 0) return imoveis;
+    } catch (e) {
+      console.log(\`   ⚠️  VivaReal ScraperAPI falhou para \${bairro}: \${e.message?.slice(0, 50)}\`);
+    }
   }
+  return [];
 }
 
 // ─── MERCADO LIVRE (API pública oficial, sem chave) ───────────────────────────
@@ -724,29 +730,66 @@ async function buscarMercadoLivre(bairro) {
 }
 
 // ─── OLX (parse HTML — sem proxy, melhor esforço) ────────────────────────────
-async function buscarOLXHtml(bairro) {
+// ─── OLX via Apify (conta dedicada OLX) ──────────────────────────────────────
+async function buscarOLXApify(bairro) {
+  const token = process.env.APIFY_TOKEN_OLX;
+  if (!token) return [];
   const slug = toSlug(bairro);
-  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+  const searchUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
+  const input = {
+    startUrls: [{ url: searchUrl }],
+    maxItems: 48,
+    proxyConfiguration: { useApifyProxy: true },
+  };
   try {
-    const { data: html } = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-      },
-      timeout: 25000,
+    const runRes = await axios.post(
+      `https://api.apify.com/v2/acts/daddyapi~olx-brazil-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
+      input,
+      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
+    );
+    const items = runRes.data || [];
+    if (!Array.isArray(items) || items.length === 0) return [];
+    return items
+      .filter(i => i.price && i.price > 0)
+      .map(i => ({
+        titulo: i.title || `Imovel OLX - ${bairro}`,
+        preco: typeof i.price === 'string' ? parseInt(i.price.replace(/\D/g, '')) : parseInt(i.price) || 0,
+        bairro,
+        tipo: 'residencial',
+        portal: 'OLX',
+        link: i.url || i.link || '',
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 20);
+  } catch (e) {
+    console.log(`   ⚠️  OLX Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return [];
+  }
+}
+
+// ─── OLX via ScraperAPI (fallback grátis 1000 req/mês) ───────────────────────
+async function buscarOLXScraperAPI(bairro) {
+  const scraperKey = process.env.SCRAPERAPI_KEY;
+  if (!scraperKey) return [];
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+  const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
+  try {
+    const { data: html } = await axios.get(proxyUrl, {
+      headers: { 'Accept': 'text/html' },
+      timeout: 60000,
     });
     const $ = cheerio.load(html);
     const imoveis = [];
-    // OLX embeds listings in a JSON __NEXT_DATA__ script tag
     const nextData = $('script#__NEXT_DATA__').html();
     if (nextData) {
       const parsed = JSON.parse(nextData);
-      const ads = parsed?.props?.pageProps?.ads || parsed?.props?.pageProps?.listingProps?.ads || [];
+      const ads = parsed?.props?.pageProps?.ads
+        || parsed?.props?.pageProps?.listingProps?.ads
+        || [];
       ads.forEach(ad => {
         const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
         const link = ad.url || ad.linkUrl || '';
-        const titulo = ad.title || `Imovel - ${bairro}`;
+        const titulo = ad.title || `Imovel OLX - ${bairro}`;
         if (preco > 0 && link.length > 20) {
           imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
         }
@@ -754,9 +797,23 @@ async function buscarOLXHtml(bairro) {
     }
     return imoveis;
   } catch (e) {
-    console.log(`   ⚠️  OLX HTML falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    console.log(`   ⚠️  OLX ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
     return [];
   }
+}
+
+// Orquestra OLX: Apify primeiro, ScraperAPI como fallback
+async function buscarOLXHtml(bairro) {
+  // Tenta Apify dedicado OLX
+  if (process.env.APIFY_TOKEN_OLX) {
+    const result = await buscarOLXApify(bairro);
+    if (result.length > 0) return result;
+  }
+  // Fallback: ScraperAPI (1000 req/mês grátis)
+  if (process.env.SCRAPERAPI_KEY) {
+    return buscarOLXScraperAPI(bairro);
+  }
+  return [];
 }
 
 const BUSCAS = [
@@ -1006,5 +1063,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
-cron.schedule('0 */2 * * *', rodarScraper); // 1x a cada 2h — economiza requisições
+cron.schedule('0 */4 * * *', rodarScraper); // 1x a cada 4h — preserva free tiers
 rodarScraper();
