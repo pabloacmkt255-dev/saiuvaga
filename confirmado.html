@@ -264,41 +264,68 @@ async function tentarProcessar(session, origem) {
   await processarUsuario(session.user);
 }
 
-// 1) onAuthStateChange — captura SIGNED_IN, USER_UPDATED, TOKEN_REFRESHED
-sb.auth.onAuthStateChange(async (event, session) => {
-  console.log('[SaiuVaga] Auth event:', event, session?.user?.id);
-  if (['SIGNED_IN', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event) && session?.user) {
-    await tentarProcessar(session, event);
-  }
-});
-
-// 2) Tenta getSession imediatamente — pode já ter sessão ativa (ex: Google OAuth)
+// Inicialização principal — detecta hash da URL de confirmação de email
 (async () => {
   try {
+    // 1) onAuthStateChange registrado ANTES de tudo para não perder eventos
+    sb.auth.onAuthStateChange(async (event, session) => {
+      console.log('[SaiuVaga] Auth event:', event, session?.user?.id);
+      if (['SIGNED_IN', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event) && session?.user) {
+        await tentarProcessar(session, event);
+      }
+    });
+
+    // 2) Verifica se há hash de confirmação na URL (#access_token=...&type=signup)
+    const hash = window.location.hash;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    const tokenType = params.get('type');     // 'signup', 'recovery', etc.
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (accessToken && refreshToken) {
+      console.log('[SaiuVaga] Hash detectado, tipo:', tokenType);
+      // Força o Supabase a trocar o hash por uma sessão real
+      const { data, error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      if (error) {
+        console.warn('[SaiuVaga] setSession falhou:', error.message);
+        showError('Link de confirmação inválido ou expirado. Solicite um novo cadastro.');
+        return;
+      }
+      if (data?.session) {
+        await tentarProcessar(data.session, 'hash-url');
+        return;
+      }
+    }
+
+    // 3) Sem hash — tenta getSession (Google OAuth ou sessão já ativa)
     const { data: { session } } = await sb.auth.getSession();
     if (session?.user) {
       await tentarProcessar(session, 'getSession-imediato');
+      return;
     }
-  } catch(e) { console.warn('getSession imediato falhou:', e); }
-})();
 
-// 3) Fallback progressivo: 1s, 3s, 6s — dá tempo ao Supabase processar o hash da URL
-[1000, 3000, 6000].forEach(delay => {
-  setTimeout(async () => {
-    if (jaProcessou) return;
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session?.user) {
-        await tentarProcessar(session, `fallback-${delay}ms`);
-      } else if (delay === 6000) {
-        // Último fallback — desiste e mostra erro
-        showError('Link de confirmação inválido ou expirado. Solicite um novo cadastro.');
+    // 4) Fallback: espera o onAuthStateChange processar o hash automaticamente (até 8s)
+    const timeouts = [1500, 4000, 8000];
+    for (const delay of timeouts) {
+      await new Promise(r => setTimeout(r, delay - (timeouts[timeouts.indexOf(delay) - 1] || 0)));
+      if (jaProcessou) return;
+      const { data: { session: s } } = await sb.auth.getSession();
+      if (s?.user) {
+        await tentarProcessar(s, `fallback-${delay}ms`);
+        return;
       }
-    } catch(e) {
-      if (delay === 6000) showError('Erro ao verificar sessão. Tente novamente.');
     }
-  }, delay);
-});
+
+    // Desistiu após 8s
+    if (!jaProcessou) {
+      showError('Link de confirmação inválido ou expirado. Solicite um novo cadastro.');
+    }
+
+  } catch(e) {
+    console.error('[SaiuVaga] Erro na inicialização:', e);
+    if (!jaProcessou) showError('Erro ao verificar sessão: ' + e.message);
+  }
+})();
 </script>
 </body>
 </html>
