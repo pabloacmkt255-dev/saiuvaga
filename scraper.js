@@ -691,24 +691,55 @@ async function buscarViaApify(bairro) {
   if (!token) return null;
 
   const slug = toSlug(bairro);
+  // Usa cheerio-scraper (muito mais barato que zap-imoveis-scraper)
+  // Tenta ZAP direto primeiro, depois VivaReal como fallback
+  const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
   const input = {
-    location: `${bairro}, Sao Paulo`,
-    limit: 48,
-    maximize_coverage: false,
-    below_market_price: false,
-    near_transit: false,
+    startUrls: [{ url: targetUrl }],
+    maxCrawlingDepth: 0,
+    maxResultsPerCrawl: 50,
+    pageFunction: `async function pageFunction(context) {
+      const { $ } = context;
+      const items = [];
+      const nextDataEl = $('script#__NEXT_DATA__');
+      if (nextDataEl.length) {
+        try {
+          const parsed = JSON.parse(nextDataEl.html());
+          const listings =
+            parsed?.props?.pageProps?.initialProps?.listings ||
+            parsed?.props?.pageProps?.listings ||
+            parsed?.props?.pageProps?.search?.result?.listings || [];
+          listings.forEach(l => {
+            const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
+            const href = l?.link?.href || '';
+            const link = href ? 'https://www.zapimoveis.com.br' + href : '';
+            const titulo = l?.listing?.title || 'Imovel ZAP';
+            const quartos = l?.listing?.bedrooms || null;
+            const area = l?.listing?.usableAreas?.[0] || null;
+            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link, quartos, area });
+          });
+        } catch(e) {}
+      }
+      return items;
+    }`,
   };
 
   try {
-    // Dispara o actor e aguarda resultado
     const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/fatihtahta~zap-imoveis-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
+      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
       input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 130000 }
+      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
     );
 
     const items = runRes.data || [];
     if (!Array.isArray(items) || items.length === 0) return [];
+
+    // cheerio-scraper retorna items diretos já mapeados
+    if (items[0]?.link) {
+      return items
+        .filter(i => i.preco > 0 && i.link?.length > 20)
+        .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'ZAP' }));
+    }
 
     return items
       .filter(i => {
