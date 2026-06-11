@@ -288,18 +288,17 @@ sb.auth.getSession().then(async ({ data }) => {
 });
 
 sb.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_IN' && session) {
+  // Só age em login explícito (aba "Já tenho conta") com e-mail confirmado
+  // Novos cadastros são tratados pelo confirmado.html após clique no link
+  if (event === 'SIGNED_IN' && session?.user?.email_confirmed_at) {
     const user = session.user;
-    // Só processa se o email já foi confirmado — trial é ativado pelo confirmado.html
-    if (!user.email_confirmed_at) return;
     const { data: existe } = await sb.from('users').select('id, trial_usado, ativo, plano').eq('id', user.id).maybeSingle();
-    if (!existe) return; // novo usuário — aguarda confirmado.html processar
+    if (!existe) return;
     if (existe.trial_usado && !existe.ativo) {
       window.location.href = 'saiuvaga-pagamento.html';
     } else if (existe.ativo) {
-      showSuccess('Bem-vindo de volta! 👋', 'Seus alertas continuam ativos.');
+      window.location.href = 'saiuvaga-alertas.html';
     }
-    // Sem trial e sem plano ativo — aguarda confirmado.html ativar
   }
 });
 
@@ -366,9 +365,6 @@ function showSuccess(title, sub) {
 }
 
 async function cadastrar() {
-  // Garante que o botão nunca fica preso de chamada anterior
-  setLoading('btn-cadastrar','spin1',false);
-
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
   const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
@@ -406,6 +402,8 @@ async function cadastrar() {
   }
   if (data.user) {
     await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
+    // Faz signOut imediatamente — usuário só entra após confirmar e-mail
+    await sb.auth.signOut();
   }
   setLoading('btn-cadastrar','spin1',false);
   if (typeof gtag !== 'undefined') { gtag('event','conversion',{'send_to':'AW-18192818213/lead'}); gtag('event','sign_up',{'method':'email'}); }
