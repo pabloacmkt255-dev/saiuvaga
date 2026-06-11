@@ -374,6 +374,9 @@ async function init() {
     if (!session?.user) { window.location.href = 'saiuvaga-cadastro.html'; return; }
 
     userId = session.user.id;
+    // Salva user_id e token para outras páginas usarem (persiste na sessão do browser)
+    sessionStorage.setItem('sv_uid', userId);
+    sessionStorage.setItem('sv_token', session.access_token || '');
 
     // Usa backend (service_key) para evitar bloqueio de RLS no anon key
     const agora = new Date();
