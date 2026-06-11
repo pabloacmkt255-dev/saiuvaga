@@ -687,7 +687,7 @@ app.get('/api/admin/payments', async (req, res) => {
 
 // Busca imoveis via Apify actor fatihtahta/zap-imoveis-scraper
 async function buscarViaApify(bairro) {
-  const token = process.env.APIFY_TOKEN;
+  const token = process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN;
   if (!token) return null;
 
   const slug = toSlug(bairro);
@@ -1175,25 +1175,27 @@ async function buscarOLX(bairro, region) {
     ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
   ];
 
-  // Se todas as fontes grátis falharam, tenta proxy como reserva
+  // Se todas as fontes grátis falharam, tenta Apify ZAP dedicado (token separado)
+  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN)) {
+    try {
+      const apifyResult = await buscarViaApify(bairro);
+      if (apifyResult && apifyResult.length > 0) {
+        todos.push(...apifyResult);
+        console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
+      }
+    } catch (e) {
+      console.log(`   __ Apify ZAP falhou: ${e.message?.slice(0, 50)}`);
+    }
+  }
+
+  // Proxy como último recurso (raramente necessário)
   if (todos.length === 0) {
-    console.log(`   ⚠️  Fontes grátis sem resultado, tentando proxy...`);
+    console.log(`   ⚠️  Tentando proxy como último recurso...`);
     try {
       const imoveis = await buscarZapViaProxy(bairro);
       todos.push(...imoveis);
     } catch (e) {
       console.log(`   __ Proxy falhou: ${e.message?.slice(0, 50)}`);
-    }
-  }
-
-  // Último recurso: Apify (caro — backup de emergência)
-  if (todos.length === 0 && process.env.APIFY_TOKEN) {
-    try {
-      const apifyResult = await buscarViaApify(bairro);
-      if (apifyResult && apifyResult.length > 0) todos.push(...apifyResult);
-      console.log(`   ⚠️  Usando Apify (backup emergencial) para ${bairro}`);
-    } catch (e) {
-      console.log(`   __ Apify também falhou: ${e.message?.slice(0, 50)}`);
     }
   }
 
