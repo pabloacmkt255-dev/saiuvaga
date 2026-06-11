@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SaiuVaga — Buscar Imóveis</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --g: #1D9E75; --gdk: #0B6B4E; --glt: #E0F5EE;
+  --amb: #F5A623; --ink: #0D110F; --ink2: #2E3830; --ink3: #6B7570;
+  --bg: #F4F6F4; --wh: #fff; --ln: #DDE4DE; --r: 12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100vh; color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+/* ── Topbar ─────────────────────────────────────────────────── */
+.topbar {
+  background: var(--wh); border-bottom: 1px solid var(--ln);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 50;
+}
+.logo { display: flex; align-items: center; gap: 9px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; color: var(--ink); text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; background: var(--g); border-radius: 8px; display: flex; align-items: center; justify-content: center; position: relative; }
+.logo-mark svg { width: 14px; height: 14px; }
+.logo-mark::after { content: '!'; position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; background: var(--amb); border-radius: 50%; font-size: 7px; font-weight: 800; color: #412402; display: flex; align-items: center; justify-content: center; border: 2px solid var(--wh); }
+.nav-links { display: flex; align-items: center; gap: 4px; }
+.nav-link { padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--ink3); text-decoration: none; transition: all .15s; }
+.nav-link:hover { background: var(--bg); color: var(--ink); }
+.nav-link.active { background: var(--glt); color: var(--gdk); font-weight: 600; }
+.user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink3); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--g); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+.logout-btn { font-size: 12px; color: var(--ink3); background: none; border: none; cursor: pointer; padding: 5px 8px; border-radius: 6px; }
+.logout-btn:hover { background: var(--ln); }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.page { max-width: 900px; margin: 0 auto; padding: 28px 20px 80px; }
+
+/* ── Filtros ────────────────────────────────────────────────── */
+.filters-card {
+  background: var(--wh); border: 1px solid var(--ln);
+  border-radius: 16px; padding: 22px 24px; margin-bottom: 20px;
+}
+.filters-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 17px; font-weight: 800; color: var(--ink);
+  margin-bottom: 4px;
+}
+.filters-sub { font-size: 13px; color: var(--ink3); margin-bottom: 20px; }
+.filters-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (max-width: 680px) { .filters-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 400px) { .filters-grid { grid-template-columns: 1fr; } }
+
+.field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--ink3); margin-bottom: 6px; }
+.field input, .field select {
+  width: 100%; height: 44px;
+  border: 1.5px solid var(--ln); border-radius: var(--r);
+  padding: 0 12px; font-size: 14px; font-family: 'Inter', sans-serif;
+  background: var(--bg); color: var(--ink); outline: none;
+  transition: all .2s; appearance: none;
+}
+.field input:focus, .field select:focus { border-color: var(--g); background: var(--wh); box-shadow: 0 0 0 3px rgba(29,158,117,.1); }
+
+.filters-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn-search {
+  height: 44px; padding: 0 28px;
+  background: var(--g); color: #fff; border: none; border-radius: var(--r);
+  font-size: 14px; font-weight: 600; font-family: 'Plus Jakarta Sans', sans-serif;
+  cursor: pointer; display: flex; align-items: center; gap: 8px;
+  transition: all .2s;
+}
+.btn-search:hover { background: var(--gdk); }
+.btn-search:disabled { opacity: .6; cursor: not-allowed; }
+.btn-alert {
+  height: 44px; padding: 0 20px;
+  background: var(--wh); color: var(--gdk);
+  border: 1.5px solid rgba(29,158,117,.4); border-radius: var(--r);
+  font-size: 13px; font-weight: 600; font-family: 'Plus Jakarta Sans', sans-serif;
+  cursor: pointer; display: flex; align-items: center; gap: 7px;
+  transition: all .2s;
+}
+.btn-alert:hover { background: var(--glt); border-color: var(--g); }
+.btn-alert.saved { background: var(--glt); border-color: var(--g); color: var(--gdk); }
+.alert-hint { font-size: 12px; color: var(--ink3); line-height: 1.5; }
+
+/* ── Bairros chips ──────────────────────────────────────────── */
+.bairros-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.bairros-row input { flex: 1; }
+.add-btn { height: 44px; padding: 0 16px; background: var(--glt); border: 1.5px solid rgba(29,158,117,.3); border-radius: var(--r); color: var(--gdk); font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; white-space: nowrap; transition: all .15s; }
+.add-btn:hover { background: var(--g); color: #fff; border-color: var(--g); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; min-height: 0; }
+.chip { display: inline-flex; align-items: center; gap: 5px; background: var(--glt); border: 1px solid rgba(29,158,117,.25); border-radius: 99px; padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--gdk); }
+.chip-remove { width: 14px; height: 14px; border-radius: 50%; background: rgba(11,107,78,.15); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--gdk); padding: 0; line-height: 1; }
+.chip-remove:hover { background: rgba(11,107,78,.3); }
+
+/* ── Resultados ─────────────────────────────────────────────── */
+.results-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+}
+.results-count { font-size: 14px; color: var(--ink3); }
+.results-count strong { color: var(--ink); }
+.sort-select { height: 34px; padding: 0 10px; border: 1.5px solid var(--ln); border-radius: 8px; font-size: 12px; font-family: 'Inter', sans-serif; background: var(--wh); color: var(--ink); outline: none; appearance: none; cursor: pointer; }
+
+.imoveis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 580px) { .imoveis-grid { grid-template-columns: 1fr; } }
+
+.imovel-card {
+  background: var(--wh); border: 1px solid var(--ln);
+  border-radius: 14px; overflow: hidden;
+  transition: box-shadow .2s, transform .15s;
+  display: flex; flex-direction: column;
+}
+.imovel-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); transform: translateY(-2px); }
+
+.card-top {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--ln);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+}
+.card-portal {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--ink3); margin-bottom: 5px;
+}
+.card-titulo { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.card-bairro { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+.card-preco {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 17px; font-weight: 800; color: var(--g);
+  white-space: nowrap; flex-shrink: 0;
+}
+.card-preco span { font-size: 11px; font-weight: 400; color: var(--ink3); }
+
+.card-bottom {
+  padding: 10px 18px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-size: 11px; color: var(--ink3); background: var(--bg); border: 1px solid var(--ln); border-radius: 6px; padding: 2px 8px; }
+.card-link {
+  font-size: 12px; font-weight: 600; color: var(--g);
+  text-decoration: none; white-space: nowrap;
+  display: flex; align-items: center; gap: 4px;
+}
+.card-link:hover { text-decoration: underline; }
+
+.card-novo { background: var(--glt); border-color: rgba(29,158,117,.3); }
+.card-novo .card-top { border-bottom-color: rgba(29,158,117,.2); }
+.novo-badge { display: inline-flex; align-items: center; gap: 4px; background: var(--g); color: #fff; font-size: 9px; font-weight: 700; border-radius: 99px; padding: 2px 7px; letter-spacing: .3px; }
+
+/* ── Estados ────────────────────────────────────────────────── */
+.state-box { text-align: center; padding: 48px 20px; color: var(--ink3); }
+.state-icon { font-size: 40px; margin-bottom: 12px; }
+.state-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 17px; font-weight: 700; color: var(--ink2); margin-bottom: 6px; }
+.state-sub { font-size: 13px; line-height: 1.6; }
+
+/* ── Spinner ────────────────────────────────────────────────── */
+.spinner-inline { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--ink2); color: #fff; padding: 11px 22px; border-radius: 99px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,.2); transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s; opacity: 0; z-index: 1000; white-space: nowrap; }
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.success { background: var(--gdk); }
+.toast.error { background: #b91c1c; }
+
+/* ── Auth wall ──────────────────────────────────────────────── */
+#auth-wall { display: none; max-width: 380px; margin: 80px auto; text-align: center; padding: 0 20px; }
+#auth-wall .ico { font-size: 44px; margin-bottom: 14px; }
+#auth-wall h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+#auth-wall p { font-size: 14px; color: var(--ink3); margin-bottom: 22px; line-height: 1.6; }
+.auth-btn { display: inline-block; background: var(--g); color: #fff; padding: 12px 30px; border-radius: var(--r); font-weight: 600; font-size: 14px; text-decoration: none; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+/* ── Loading overlay ────────────────────────────────────────── */
+#loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; z-index: 999; }
+.loading-spin { width: 32px; height: 32px; border: 3px solid var(--ln); border-top-color: var(--g); border-radius: 50%; animation: spin .7s linear infinite; }
+#loading-overlay p { font-size: 13px; color: var(--ink3); }
+
+/* ── Plano expirado banner ──────────────────────────────────── */
+.expired-banner { background: #fef9ee; border: 1px solid rgba(245,166,35,.3); border-radius: var(--r); padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: #92400e; }
+.expired-banner a { color: var(--g); font-weight: 600; text-decoration: none; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="loading-spin"></div>
+  <p>Carregando...</p>
+</div>
+
+<div id="auth-wall">
+  <div class="ico">🔐</div>
+  <h2>Acesso restrito</h2>
+  <p>Você precisa estar logado para buscar imóveis.</p>
+  <a href="saiuvaga-cadastro.html" class="auth-btn">Entrar ou cadastrar →</a>
+</div>
+
+<div id="main-content" style="display:none">
+
+  <div class="topbar">
+    <a href="saiuvaga-cadastro.html" class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 18 18" fill="none">
+          <circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/>
+          <line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      SaiuVaga
+    </a>
+    <nav class="nav-links">
+      <a href="saiuvaga-busca.html" class="nav-link active">🔍 Buscar</a>
+      <a href="saiuvaga-alertas.html" class="nav-link">🔔 Meus alertas</a>
+    </nav>
+    <div class="user-info">
+      <div class="status-dot"></div>
+      <span id="user-label">—</span>
+      <button class="logout-btn" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="page">
+
+    <div class="expired-banner" id="expired-banner" style="display:none">
+      ⏰ Seu trial expirou. Você ainda pode buscar, mas não receberá alertas automáticos.
+      <a href="saiuvaga-pagamento.html">Assinar agora →</a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filters-card">
+      <div class="filters-title">Buscar imóveis em São Paulo</div>
+      <div class="filters-sub">Filtre e veja o que está disponível agora. Salve os filtros para receber alertas automáticos no WhatsApp.</div>
+
+      <!-- Bairros -->
+      <div class="field" style="margin-bottom:10px">
+        <label>Bairros</label>
+        <div class="bairros-row">
+          <input type="text" id="bairro-input" placeholder="Ex: Pinheiros, Moema, Vila Madalena..." autocomplete="off" list="bairros-list">
+          <datalist id="bairros-list">
+            <option value="Pinheiros"><option value="Vila Madalena"><option value="Moema"><option value="Itaim Bibi">
+            <option value="Jardim Paulista"><option value="Brooklin"><option value="Perdizes"><option value="Santa Cecília">
+            <option value="Bela Vista"><option value="Liberdade"><option value="Vila Mariana"><option value="Saúde">
+            <option value="Campo Belo"><option value="Lapa"><option value="Bom Retiro"><option value="Consolação">
+            <option value="República"><option value="Higienópolis"><option value="Paraíso"><option value="Aclimação">
+            <option value="Sumaré"><option value="Vila Pompeia"><option value="Faria Lima"><option value="Jardins">
+            <option value="Vila Olimpia">
+          </datalist>
+          <button class="add-btn" onclick="adicionarBairro()">+ Bairro</button>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="filters-grid">
+        <div class="field">
+          <label>Preço máximo</label>
+          <input type="number" id="preco-max" placeholder="R$ máximo/mês" min="0" step="100">
+        </div>
+        <div class="field">
+          <label>Quartos mín.</label>
+          <select id="quartos-min">
+            <option value="0">Qualquer</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="tipo">
+            <option value="">Qualquer</option>
+            <option value="apartamento">Apartamento</option>
+            <option value="casa">Casa</option>
+            <option value="kitnet">Kitnet/Studio</option>
+            <option value="residencial">Residencial</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Portal</label>
+          <select id="portal">
+            <option value="">Todos</option>
+            <option value="ZAP">ZAP</option>
+            <option value="OLX">OLX</option>
+            <option value="VivaReal">VivaReal</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filters-actions">
+        <button class="btn-search" id="btn-buscar" onclick="buscar()">
+          <span id="btn-text">🔍 Buscar agora</span>
+          <div class="spinner-inline" id="btn-spinner" style="display:none"></div>
+        </button>
+        <button class="btn-alert" id="btn-alert" onclick="salvarAlerta()" style="display:none">
+          🔔 Me avisar quando sair novo
+        </button>
+        <span class="alert-hint" id="alert-hint" style="display:none"></span>
+      </div>
+    </div>
+
+    <!-- Resultados -->
+    <div id="results-area"></div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://mlsqebefrjqbeujkxney.supabase.co',
+  'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
+);
+
+let userId = null;
+let userAtivo = false;
+let bairros = [];
+let ultimaBusca = null;
+
+// ── Auth ──────────────────────────────────────────────────────
+async function init() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.user) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      document.getElementById('auth-wall').style.display = 'block';
+      return;
+    }
+    userId = session.user.id;
+    document.getElementById('user-label').textContent = session.user.email?.split('@')[0] || 'usuário';
+
+    // Checa status do plano
+    const { data: user } = await sb.from('users')
+      .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_tipos, alerta_freq_max')
+      .eq('id', userId).maybeSingle();
+
+    const agora = new Date();
+    const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
+    userAtivo = !!(user?.ativo && validade && validade > agora);
+
+    if (user?.trial_usado && !userAtivo) {
+      document.getElementById('expired-banner').style.display = 'flex';
+    }
+
+    // Pré-carrega alertas existentes
+    if (user?.alerta_bairros?.length) {
+      bairros = [...user.alerta_bairros];
+      renderChips();
+      // Pré-preenche os filtros com o alerta salvo
+      if (user.alerta_preco_max) document.getElementById('preco-max').value = user.alerta_preco_max;
+      if (user.alerta_quartos_min) document.getElementById('quartos-min').value = user.alerta_quartos_min;
+      if (user.alerta_tipos?.[0]) document.getElementById('tipo').value = user.alerta_tipos[0];
+      atualizarBotaoAlerta(true);
+    }
+
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('main-content').style.display = 'block';
+
+    // Busca automática se já tinha filtros salvos
+    if (bairros.length > 0) buscar();
+
+  } catch(e) {
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('auth-wall').style.display = 'block';
+  }
+}
+
+// ── Bairros ───────────────────────────────────────────────────
+function adicionarBairro() {
+  const input = document.getElementById('bairro-input');
+  const val = input.value.trim();
+  if (!val) return;
+  const nome = val.replace(/\w+/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+  if (!bairros.includes(nome) && bairros.length < 15) {
+    bairros.push(nome);
+    renderChips();
+  }
+  input.value = '';
+  input.focus();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('bairro-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarBairro(); }
+  });
+});
+
+function removerBairro(i) {
+  bairros.splice(i, 1);
+  renderChips();
+}
+
+function renderChips() {
+  const c = document.getElementById('chips');
+  if (!bairros.length) { c.innerHTML = ''; return; }
+  c.innerHTML = bairros.map((b, i) =>
+    `<span class="chip">${b}<button class="chip-remove" onclick="removerBairro(${i})">×</button></span>`
+  ).join('');
+}
+
+// ── Busca ─────────────────────────────────────────────────────
+async function buscar() {
+  const precoMax = parseInt(document.getElementById('preco-max').value) || null;
+  const quartosMin = parseInt(document.getElementById('quartos-min').value) || 0;
+  const tipo = document.getElementById('tipo').value;
+  const portal = document.getElementById('portal').value;
+
+  ultimaBusca = { bairros: [...bairros], precoMax, quartosMin, tipo, portal };
+
+  const btn = document.getElementById('btn-buscar');
+  const txt = document.getElementById('btn-text');
+  const spin = document.getElementById('btn-spinner');
+  btn.disabled = true;
+  txt.style.display = 'none';
+  spin.style.display = 'block';
+
+  document.getElementById('results-area').innerHTML = `
+    <div class="state-box">
+      <div class="loading-spin" style="margin:0 auto 12px"></div>
+      <div style="font-size:13px;color:var(--ink3)">Buscando imóveis...</div>
+    </div>`;
+
+  try {
+    let query = sb.from('imoveis')
+      .select('id, titulo, preco, bairro, tipo, portal, link, encontrado_em, quartos, area')
+      .order('encontrado_em', { ascending: false })
+      .limit(50);
+
+    if (precoMax) query = query.lte('preco', precoMax);
+    if (tipo) query = query.ilike('tipo', `%${tipo}%`);
+    if (portal) query = query.eq('portal', portal);
+
+    if (bairros.length > 0) {
+      query = query.or(bairros.map(b => `bairro.ilike.%${b}%`).join(','));
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    renderResultados(data || []);
+
+    // Mostra botão de alerta após busca
+    document.getElementById('btn-alert').style.display = 'flex';
+    atualizarBotaoAlerta(false);
+
+  } catch(e) {
+    document.getElementById('results-area').innerHTML = `
+      <div class="state-box">
+        <div class="state-icon">⚠️</div>
+        <div class="state-title">Erro ao buscar</div>
+        <div class="state-sub">${e.message}</div>
+      </div>`;
+  } finally {
+    btn.disabled = false;
+    txt.style.display = 'block';
+    spin.style.display = 'none';
+  }
+}
+
+function renderResultados(imoveis) {
+  const area = document.getElementById('results-area');
+  const agora = new Date();
+  const recente = new Date(agora - 5 * 60 * 60 * 1000); // últimas 5h = "novo"
+
+  if (!imoveis.length) {
+    const bairrosTxt = bairros.join(', ') || 'São Paulo';
+    area.innerHTML = `
+      <div class="state-box">
+        <div class="state-icon">🔍</div>
+        <div class="state-title">Nenhum imóvel encontrado agora</div>
+        <div class="state-sub">Não há imóveis com esses critérios em <strong>${bairrosTxt}</strong> no momento.<br>Salve o alerta e te avisamos assim que sair uma vaga!</div>
+      </div>`;
+    return;
+  }
+
+  const novos = imoveis.filter(i => new Date(i.encontrado_em) >= recente).length;
+
+  area.innerHTML = `
+    <div class="results-header">
+      <div class="results-count">
+        <strong>${imoveis.length}</strong> imóvel(is) encontrado(s)
+        ${novos > 0 ? `<span style="color:var(--g);font-weight:600"> · ${novos} novo(s) nas últimas 5h</span>` : ''}
+      </div>
+    </div>
+    <div class="imoveis-grid">
+      ${imoveis.map(im => cardHtml(im, recente)).join('')}
+    </div>`;
+}
+
+function cardHtml(im, recente) {
+  const isNovo = new Date(im.encontrado_em) >= recente;
+  const preco = im.preco ? `R$${Number(im.preco).toLocaleString('pt-BR')}` : '—';
+  const tags = [];
+  if (im.quartos > 0) tags.push(`${im.quartos} quarto${im.quartos > 1 ? 's' : ''}`);
+  if (im.area > 0) tags.push(`${im.area}m²`);
+  if (im.tipo) tags.push(im.tipo);
+
+  const tempo = im.encontrado_em ? tempoRelativo(new Date(im.encontrado_em)) : '';
+
+  return `
+    <div class="imovel-card ${isNovo ? 'card-novo' : ''}">
+      <div class="card-top">
+        <div style="flex:1;min-width:0">
+          <div class="card-portal">${im.portal || '—'} ${isNovo ? '<span class="novo-badge">● novo</span>' : ''}</div>
+          <div class="card-titulo">${im.titulo || 'Imóvel disponível'}</div>
+          <div class="card-bairro">📍 ${im.bairro || 'São Paulo'} ${tempo ? `· ${tempo}` : ''}</div>
+        </div>
+        <div class="card-preco">${preco}<span>/mês</span></div>
+      </div>
+      <div class="card-bottom">
+        <div class="card-tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+        <a href="${im.link}" target="_blank" rel="noopener" class="card-link">Ver imóvel →</a>
+      </div>
+    </div>`;
+}
+
+function tempoRelativo(date) {
+  const diff = Date.now() - date.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 60) return `há ${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.floor(h / 24)}d`;
+}
+
+// ── Salvar alerta ─────────────────────────────────────────────
+async function salvarAlerta() {
+  if (!userId) return;
+  if (!ultimaBusca?.bairros?.length && !bairros.length) {
+    showToast('Adicione pelo menos um bairro para salvar o alerta.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-alert');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const payload = {
+    alerta_bairros:     bairros.length ? bairros : ultimaBusca?.bairros,
+    alerta_preco_max:   ultimaBusca?.precoMax || null,
+    alerta_quartos_min: ultimaBusca?.quartosMin || 0,
+    alerta_tipos:       ultimaBusca?.tipo ? [ultimaBusca.tipo] : [],
+    alerta_freq_max:    'ilimitado',
+  };
+
+  try {
+    const { error } = await sb.from('users').update(payload).eq('id', userId);
+    if (error) throw error;
+    atualizarBotaoAlerta(true);
+    showToast('✅ Alerta salvo! Você será avisado no WhatsApp assim que sair um imóvel igual.', 'success');
+  } catch(e) {
+    showToast('Erro ao salvar: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '🔔 Me avisar quando sair novo';
+  }
+}
+
+function atualizarBotaoAlerta(salvo) {
+  const btn = document.getElementById('btn-alert');
+  const hint = document.getElementById('alert-hint');
+  btn.disabled = false;
+  if (salvo) {
+    btn.className = 'btn-alert saved';
+    btn.innerHTML = '✅ Alerta ativo — te avisaremos no WhatsApp';
+    hint.textContent = 'Próxima varredura em até 4h. Você pode ajustar em "Meus alertas".';
+    hint.style.display = 'block';
+  } else {
+    btn.className = 'btn-alert';
+    btn.innerHTML = '🔔 Me avisar quando sair novo igual';
+    hint.style.display = 'none';
+  }
+}
+
+// ── Logout ────────────────────────────────────────────────────
+async function logout() {
+  await sb.auth.signOut();
+  window.location.href = 'saiuvaga-cadastro.html';
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+init();
+</script>
+</body>
+</html>
