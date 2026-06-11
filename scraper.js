@@ -661,38 +661,50 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 }
 
 // ─── VIVA REAL via Apify dedicado + ScraperAPI dedicado ──────────────────────
+// ─── VIVA REAL via Apify (token principal) + ScraperAPI (fallback) ───────────
 async function buscarVivaRealApify(bairro) {
-  const token = process.env.APIFY_TOKEN_VIVAREAL;
+  const token = process.env.APIFY_TOKEN;
   if (!token) return [];
   const slug = toSlug(bairro);
+  // Actor genérico do Apify que faz scraping com Cheerio
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
   const input = {
-    location: `${bairro}, Sao Paulo`,
-    businessType: 'RENTAL',
-    limit: 48,
+    startUrls: [{ url: targetUrl }],
+    maxCrawlingDepth: 0,
+    maxResultsPerCrawl: 50,
+    pageFunction: `async function pageFunction(context) {
+      const { $ } = context;
+      const items = [];
+      const nextDataEl = $('script#__NEXT_DATA__');
+      if (nextDataEl.length) {
+        try {
+          const parsed = JSON.parse(nextDataEl.html());
+          const listings =
+            parsed?.props?.pageProps?.initialState?.results?.listings ||
+            parsed?.props?.pageProps?.results?.listings || [];
+          listings.forEach(l => {
+            const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
+            const href = l?.link?.href || '';
+            const link = href ? 'https://www.vivareal.com.br' + href : '';
+            const titulo = l?.listing?.title || 'Imovel VivaReal';
+            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
+          });
+        } catch(e) {}
+      }
+      return items;
+    }`,
   };
   try {
     const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/fatihtahta~zap-imoveis-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
+      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
       input,
       { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
     );
     const items = runRes.data || [];
     if (!Array.isArray(items) || items.length === 0) return [];
     return items
-      .filter(i => {
-        const offers = i.pricing?.offers || [];
-        return offers.some(o => o.business_type === 'rental') && i.attributes?.usage_types?.includes('residential');
-      })
-      .map(i => {
-        const oferta = i.pricing.offers.find(o => o.business_type === 'rental');
-        return {
-          titulo: i.content?.title || `Imovel VivaReal - ${bairro}`,
-          preco: oferta?.amount || 0,
-          bairro, tipo: 'residencial', portal: 'VivaReal',
-          link: i.source_context?.url || 'https://www.vivareal.com.br/',
-        };
-      })
-      .filter(i => i.preco > 0 && i.link.length > 20);
+      .filter(i => i.preco > 0 && i.link?.length > 20)
+      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'VivaReal' }));
   } catch (e) {
     console.log(`   ⚠️  VivaReal Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return [];
@@ -700,10 +712,9 @@ async function buscarVivaRealApify(bairro) {
 }
 
 async function buscarVivaRealScraperAPI(bairro) {
-  const scraperKey = process.env.SCRAPERAPI_KEY_VIVAREAL;
+  const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
   const slug = toSlug(bairro);
-  // URL correta do VivaReal: /aluguel/sp/sao-paulo/<bairro>/
   const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
   const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
   try {
@@ -713,16 +724,14 @@ async function buscarVivaRealScraperAPI(bairro) {
     });
     const $ = cheerio.load(html);
     const imoveis = [];
-
-    // Estratégia 1: __NEXT_DATA__ (mais confiável, JSON estruturado)
+    // Estratégia 1: __NEXT_DATA__
     const nextData = $('script#__NEXT_DATA__').html();
     if (nextData) {
       try {
         const parsed = JSON.parse(nextData);
         const listings =
           parsed?.props?.pageProps?.initialState?.results?.listings ||
-          parsed?.props?.pageProps?.results?.listings ||
-          [];
+          parsed?.props?.pageProps?.results?.listings || [];
         listings.forEach(l => {
           const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
           const href = l?.link?.href || '';
@@ -734,19 +743,16 @@ async function buscarVivaRealScraperAPI(bairro) {
         });
       } catch(pe) {}
     }
-
-    // Estratégia 2: __INITIAL_STATE__ inline (fallback)
+    // Estratégia 2: __INITIAL_STATE__ inline
     if (imoveis.length === 0) {
       $('script').each((_, el) => {
         const src = $(el).html() || '';
         if (src.includes('__INITIAL_STATE__') && src.includes('listings')) {
           try {
-            // Regex corrigido sem flag /s problemática
             const match = src.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\})\s*;/);
             if (match) {
               const state = JSON.parse(match[1]);
-              const listings = state?.results?.listings || [];
-              listings.forEach(l => {
+              (state?.results?.listings || []).forEach(l => {
                 const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
                 const link = l?.link?.href ? `https://www.vivareal.com.br${l.link.href}` : '';
                 const titulo = l?.listing?.title || `Imovel VivaReal - ${bairro}`;
@@ -759,7 +765,6 @@ async function buscarVivaRealScraperAPI(bairro) {
         }
       });
     }
-
     return imoveis;
   } catch (e) {
     console.log(`   ⚠️  VivaReal ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
@@ -768,87 +773,46 @@ async function buscarVivaRealScraperAPI(bairro) {
 }
 
 async function buscarVivaRealDireto(bairro) {
-  // 1) Apify dedicado VivaReal
-  if (process.env.APIFY_TOKEN_VIVAREAL) {
+  // 1) Apify (token principal)
+  if (process.env.APIFY_TOKEN) {
     const result = await buscarVivaRealApify(bairro);
     if (result.length > 0) return result;
   }
-  // 2) ScraperAPI dedicado VivaReal
-  if (process.env.SCRAPERAPI_KEY_VIVAREAL) {
+  // 2) ScraperAPI (token principal)
+  if (process.env.SCRAPERAPI_KEY) {
     const result = await buscarVivaRealScraperAPI(bairro);
     if (result.length > 0) return result;
   }
   return [];
 }
 
-// ─── MERCADO LIVRE (API pública oficial, sem chave) ───────────────────────────
-// Categoria MLB1574 = Imóveis, MLB200000 = Aluguel residencial SP
-async function buscarMercadoLivre(bairro) {
-  try {
-    // Endpoint alternativo: busca via site MLB com headers completos de browser
-    const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1574&q=${encodeURIComponent(`aluguel ${bairro} sao paulo`)}&limit=48&offset=0`;
-    const { data } = await axios.get(url, {
-      headers: {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': 'https://imoveis.mercadolivre.com.br/',
-        'Origin': 'https://imoveis.mercadolivre.com.br',
-        'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-      },
-      timeout: 20000,
-    });
-    const results = data?.results || [];
-    return results
-      .filter(i => i.price && i.price > 0)
-      .map(i => ({
-        titulo: i.title || `Imovel - ${bairro}`,
-        preco: parseInt(i.price) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'MercadoLivre',
-        link: i.permalink || i.id ? `https://imoveis.mercadolivre.com.br/MLB-${i.id}` : '',
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 20);
-  } catch (e) {
-    console.log(`   ⚠️  MercadoLivre falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
-    return [];
-  }
-}
+// ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
+async function buscarMercadoLivre(bairro) { return []; }
 
-// ─── OLX (parse HTML — sem proxy, melhor esforço) ────────────────────────────
-// ─── OLX via Apify (conta dedicada OLX) ──────────────────────────────────────
+// ─── OLX via Apify (token principal) + ScraperAPI (fallback) ─────────────────
 async function buscarOLXApify(bairro) {
-  const token = process.env.APIFY_TOKEN_OLX;
+  const token = process.env.APIFY_TOKEN;
   if (!token) return [];
   const slug = toSlug(bairro);
-  const searchUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
-  // Usa o actor genérico cheerio-scraper do Apify (sempre disponível)
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
   const input = {
-    startUrls: [{ url: searchUrl }],
+    startUrls: [{ url: targetUrl }],
     maxCrawlingDepth: 0,
     maxResultsPerCrawl: 50,
     pageFunction: `async function pageFunction(context) {
-      const { $, request } = context;
+      const { $ } = context;
       const items = [];
-      const nextDataEl = $('#__NEXT_DATA__');
+      const nextDataEl = $('script#__NEXT_DATA__');
       if (nextDataEl.length) {
         try {
           const parsed = JSON.parse(nextDataEl.html());
           const ads = parsed?.props?.pageProps?.ads
-            || parsed?.props?.pageProps?.listingProps?.ads
-            || [];
+            || parsed?.props?.pageProps?.listingProps?.ads || [];
           ads.forEach(ad => {
             const preco = parseInt((ad.price || '').replace(/\\D/g, '')) || 0;
             const link = ad.url || ad.linkUrl || '';
-            if (preco > 0 && link.length > 20) {
-              items.push({ title: ad.title, price: preco, url: link });
-            }
+            const titulo = ad.title || 'Imovel OLX';
+            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
           });
         } catch(e) {}
       }
@@ -860,30 +824,20 @@ async function buscarOLXApify(bairro) {
       `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
       input,
       { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-
     );
     const items = runRes.data || [];
     if (!Array.isArray(items) || items.length === 0) return [];
     return items
-      .filter(i => i.price && i.price > 0)
-      .map(i => ({
-        titulo: i.title || `Imovel OLX - ${bairro}`,
-        preco: typeof i.price === 'string' ? parseInt(i.price.replace(/\D/g, '')) : parseInt(i.price) || 0,
-        bairro,
-        tipo: 'residencial',
-        portal: 'OLX',
-        link: i.url || i.link || '',
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 20);
+      .filter(i => i.preco > 0 && i.link?.length > 20)
+      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'OLX' }));
   } catch (e) {
     console.log(`   ⚠️  OLX Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return [];
   }
 }
 
-// ─── OLX via ScraperAPI (fallback grátis 1000 req/mês) ───────────────────────
 async function buscarOLXScraperAPI(bairro) {
-  const scraperKey = process.env.SCRAPERAPI_KEY_OLX;
+  const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
   const slug = toSlug(bairro);
   const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
@@ -900,8 +854,7 @@ async function buscarOLXScraperAPI(bairro) {
       try {
         const parsed = JSON.parse(nextData);
         const ads = parsed?.props?.pageProps?.ads
-          || parsed?.props?.pageProps?.listingProps?.ads
-          || [];
+          || parsed?.props?.pageProps?.listingProps?.ads || [];
         ads.forEach(ad => {
           const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
           const link = ad.url || ad.linkUrl || '';
@@ -921,15 +874,13 @@ async function buscarOLXScraperAPI(bairro) {
   }
 }
 
-// Orquestra OLX: Apify dedicado OLX primeiro, ScraperAPI dedicado OLX como fallback
+// Orquestra OLX: Apify primeiro, ScraperAPI como fallback
 async function buscarOLXHtml(bairro) {
-  // 1) Apify dedicado OLX
-  if (process.env.APIFY_TOKEN_OLX) {
+  if (process.env.APIFY_TOKEN) {
     const result = await buscarOLXApify(bairro);
     if (result.length > 0) return result;
   }
-  // 2) ScraperAPI dedicado OLX
-  if (process.env.SCRAPERAPI_KEY_OLX) {
+  if (process.env.SCRAPERAPI_KEY) {
     return buscarOLXScraperAPI(bairro);
   }
   return [];
