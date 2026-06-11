@@ -284,7 +284,12 @@ sb.auth.getSession().then(async ({ data }) => {
   } catch(e) {}
 });
 
+// Flag para ignorar onAuthStateChange durante login manual (evita conflito com função entrar())
+let loginManualEmAndamento = false;
+
 sb.auth.onAuthStateChange(async (event, session) => {
+  // Ignorar se login manual está em andamento — entrar() cuida do redirect
+  if (loginManualEmAndamento) return;
   // Só age em login explícito (aba "Já tenho conta") com e-mail confirmado
   // Novos cadastros são tratados pelo confirmado.html após clique no link
   if (event === 'SIGNED_IN' && session?.user?.email_confirmed_at) {
@@ -421,8 +426,10 @@ async function entrar() {
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { showError('Preencha e-mail e senha.'); return; }
   setLoading('btn-entrar','spin2',true); hideError();
+  loginManualEmAndamento = true;
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) {
+    loginManualEmAndamento = false;
     setLoading('btn-entrar','spin2',false);
     const msgs = { 'Invalid login credentials':'E-mail ou senha incorretos.', 'Email not confirmed':'Confirme seu e-mail antes de entrar.' };
     showError(msgs[error.message] || error.message); return;
