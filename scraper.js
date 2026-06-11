@@ -768,49 +768,85 @@ async function salvarImoveis(imoveis) {
 }
 
 async function verificarAlertas() {
-  const { data: filtros } = await supabase
-    .from('filtros')
-    .select('*, users(whatsapp, ativo, plano_validade)')
-    .eq('ativo', true);
+  // Busca usuários ativos com alerta configurado nas colunas alerta_*
+  const { data: usuarios } = await supabase
+    .from('users')
+    .select('id, whatsapp, alerta_bairros, alerta_tipos, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max, plano_validade')
+    .eq('ativo', true)
+    .not('whatsapp', 'is', null)
+    .not('alerta_bairros', 'is', null);
 
-  if (!filtros || filtros.length === 0) return;
+  if (!usuarios || usuarios.length === 0) {
+    console.log('   ℹ️  Nenhum usuário com alerta configurado.');
+    return;
+  }
 
-  for (const filtro of filtros) {
-    const whatsapp = filtro.users?.whatsapp;
-    if (!whatsapp || !filtro.users?.ativo) continue;
-
-    // Checa se o plano ainda está dentro da validade
-    const validade = filtro.users?.plano_validade ? new Date(filtro.users.plano_validade) : null;
+  for (const usuario of usuarios) {
+    // Checa validade do plano
+    const validade = usuario.plano_validade ? new Date(usuario.plano_validade) : null;
     if (!validade || validade <= new Date()) continue;
 
-    const { data: matches } = await supabase
-      .from('imoveis')
-      .select('*')
-      .ilike('bairro', `%${filtro.bairro}%`)
-      .lte('preco', filtro.preco_max)
-      .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString()); // 65min - cobre o ciclo de 60min
+    // Horário de silêncio
+    if (usuario.alerta_silencio_inicio && usuario.alerta_silencio_fim) {
+      const hora = new Date().getHours();
+      const ini  = parseInt(usuario.alerta_silencio_inicio);
+      const fim  = parseInt(usuario.alerta_silencio_fim);
+      const emSilencio = ini > fim
+        ? (hora >= ini || hora < fim)
+        : (hora >= ini && hora < fim);
+      if (emSilencio) continue;
+    }
 
-    if (!matches || matches.length === 0) continue;
+    const bairros    = usuario.alerta_bairros   || [];
+    const precoMax   = usuario.alerta_preco_max  || 99999;
+    const quartosMin = parseInt(usuario.alerta_quartos_min) || 0;
+    const areaMin    = parseInt(usuario.alerta_area_min)    || 0;
+    const freqMax    = usuario.alerta_freq_max === 'ilimitado' ? 9999 : parseInt(usuario.alerta_freq_max) || 9999;
 
-    for (const imovel of matches) {
-      const { data: jaEnviado } = await supabase
-        .from('alertas')
-        .select('id')
-        .eq('user_id', filtro.user_id)
-        .eq('imovel_id', imovel.id)
-        .maybeSingle();
+    // Conta alertas enviados hoje (controle de frequência)
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const { count: alertasHoje } = await supabase
+      .from('alertas')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', usuario.id)
+      .gte('created_at', hoje.toISOString());
+    if ((alertasHoje || 0) >= freqMax) continue;
 
-      if (jaEnviado) continue;
+    // Busca imóveis novos (últimos 65 min) que batem com os filtros do usuário
+    for (const bairro of bairros) {
+      const { data: matches } = await supabase
+        .from('imoveis')
+        .select('*')
+        .ilike('bairro', `%${bairro}%`)
+        .lte('preco', precoMax)
+        .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString());
 
-      await supabase.from('alertas').insert({
-        user_id: filtro.user_id,
-        filtro_id: filtro.id,
-        imovel_id: imovel.id,
-      });
+      if (!matches || matches.length === 0) continue;
 
-      await enviarWhatsApp(whatsapp, imovel);
-      console.log(`   🔔 Alerta: ${imovel.titulo} → ${whatsapp}`);
-      await new Promise(r => setTimeout(r, 1000));
+      for (const imovel of matches) {
+        // Filtros adicionais
+        if (quartosMin > 0 && (imovel.quartos || 0) < quartosMin) continue;
+        if (areaMin   > 0 && (imovel.area    || 0) < areaMin)    continue;
+
+        // Evita reenvio
+        const { data: jaEnviado } = await supabase
+          .from('alertas')
+          .select('id')
+          .eq('user_id', usuario.id)
+          .eq('imovel_id', imovel.id)
+          .maybeSingle();
+        if (jaEnviado) continue;
+
+        // Registra e envia
+        await supabase.from('alertas').insert({
+          user_id:   usuario.id,
+          imovel_id: imovel.id,
+        });
+
+        await enviarWhatsApp(usuario.whatsapp, imovel);
+        console.log(`   🔔 Alerta: ${imovel.titulo} → ${usuario.whatsapp}`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
   }
 }
