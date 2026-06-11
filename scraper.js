@@ -660,6 +660,105 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
+// ─── VIVA REAL (mesma infra do ZAP, grátis) ───────────────────────────────────
+async function buscarVivaRealDireto(bairro) {
+  const slug = toSlug(bairro);
+  const UAS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  ];
+  const ua = UAS[Math.floor(Math.random() * UAS.length)];
+  const headers = {
+    'User-Agent': ua,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'pt-BR,pt;q=0.9',
+    'x-domain': 'www.vivareal.com.br',
+    'Origin': 'https://www.vivareal.com.br',
+    'Referer': 'https://www.vivareal.com.br/',
+  };
+  const url = `https://glue-api.vivareal.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
+  try {
+    const { data } = await axios.get(url, { headers, timeout: 30000 });
+    const listings = data?.search?.result?.listings || [];
+    return listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel - ${bairro}`,
+        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'VivaReal',
+        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+  } catch (e) {
+    console.log(`   ⚠️  VivaReal direto falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    return [];
+  }
+}
+
+// ─── MERCADO LIVRE (API pública oficial, sem chave) ───────────────────────────
+// Categoria MLB1574 = Imóveis, MLB200000 = Aluguel residencial SP
+async function buscarMercadoLivre(bairro) {
+  try {
+    // Busca por categoria imóveis aluguel + cidade SP + bairro no título
+    const url = `https://api.mercadolibre.com/sites/MLB/search?category=MLB1574&q=${encodeURIComponent(`aluguel ${bairro} sao paulo`)}&limit=48&offset=0`;
+    const { data } = await axios.get(url, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      timeout: 20000,
+    });
+    const results = data?.results || [];
+    return results
+      .filter(i => i.price && i.price > 0)
+      .map(i => ({
+        titulo: i.title || `Imovel - ${bairro}`,
+        preco: parseInt(i.price) || 0,
+        bairro,
+        tipo: 'residencial',
+        portal: 'MercadoLivre',
+        link: i.permalink || i.id ? `https://imoveis.mercadolivre.com.br/MLB-${i.id}` : '',
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 20);
+  } catch (e) {
+    console.log(`   ⚠️  MercadoLivre falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    return [];
+  }
+}
+
+// ─── OLX (parse HTML — sem proxy, melhor esforço) ────────────────────────────
+async function buscarOLXHtml(bairro) {
+  const slug = toSlug(bairro);
+  const url = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+  try {
+    const { data: html } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+      timeout: 25000,
+    });
+    const $ = cheerio.load(html);
+    const imoveis = [];
+    // OLX embeds listings in a JSON __NEXT_DATA__ script tag
+    const nextData = $('script#__NEXT_DATA__').html();
+    if (nextData) {
+      const parsed = JSON.parse(nextData);
+      const ads = parsed?.props?.pageProps?.ads || parsed?.props?.pageProps?.listingProps?.ads || [];
+      ads.forEach(ad => {
+        const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
+        const link = ad.url || ad.linkUrl || '';
+        const titulo = ad.title || `Imovel - ${bairro}`;
+        if (preco > 0 && link.length > 20) {
+          imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+        }
+      });
+    }
+    return imoveis;
+  } catch (e) {
+    console.log(`   ⚠️  OLX HTML falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    return [];
+  }
+}
+
 const BUSCAS = [
   // Bairros originais
   { bairro: 'Pinheiros',      region: 'pinheiros'      },
@@ -754,42 +853,49 @@ async function buscarVivaReal(bairro) { return []; }
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // 1) ZAP direto — grátis, fonte principal
-  try {
-    const imoveis = await buscarZapDireto(bairro);
-    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imoveis via ZAP direto`);
-    return unicos;
-  } catch (e) {
-    console.log(`   ⚠️  ZAP direto falhou (${e.message?.slice(0, 50)}), tentando proxy...`);
+  // Roda todas as fontes grátis em paralelo para máxima cobertura
+  const [zapDireto, vivaReal, mercadoLivre, olxHtml] = await Promise.allSettled([
+    buscarZapDireto(bairro),
+    buscarVivaRealDireto(bairro),
+    buscarMercadoLivre(bairro),
+    buscarOLXHtml(bairro),
+  ]);
+
+  const todos = [
+    ...(zapDireto.status === 'fulfilled' ? zapDireto.value : []),
+    ...(vivaReal.status === 'fulfilled' ? vivaReal.value : []),
+    ...(mercadoLivre.status === 'fulfilled' ? mercadoLivre.value : []),
+    ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
+  ];
+
+  // Se todas as fontes grátis falharam, tenta proxy como reserva
+  if (todos.length === 0) {
+    console.log(`   ⚠️  Fontes grátis sem resultado, tentando proxy...`);
+    try {
+      const imoveis = await buscarZapViaProxy(bairro);
+      todos.push(...imoveis);
+    } catch (e) {
+      console.log(`   __ Proxy falhou: ${e.message?.slice(0, 50)}`);
+    }
   }
 
-  // 2) ZAP via proxy pago (ScraperAPI/BrightData) — reserva
-  try {
-    const imoveis = await buscarZapViaProxy(bairro);
-    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imoveis via ZAP+Proxy`);
-    return unicos;
-  } catch (e) {
-    console.log(`   ⚠️  Proxy falhou (${e.message?.slice(0, 50)}), tentando Apify...`);
-  }
-
-  // 3) Apify — backup de emergência (caro, usar com moderação)
-  if (process.env.APIFY_TOKEN) {
+  // Último recurso: Apify (caro — backup de emergência)
+  if (todos.length === 0 && process.env.APIFY_TOKEN) {
     try {
       const apifyResult = await buscarViaApify(bairro);
-      if (apifyResult && apifyResult.length > 0) {
-        const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
-        console.log(`   ✓ ${unicos.length} imoveis via Apify (backup)`);
-        return unicos;
-      }
+      if (apifyResult && apifyResult.length > 0) todos.push(...apifyResult);
+      console.log(`   ⚠️  Usando Apify (backup emergencial) para ${bairro}`);
     } catch (e) {
       console.log(`   __ Apify também falhou: ${e.message?.slice(0, 50)}`);
     }
   }
 
-  console.log(`   ❌ Nenhuma fonte funcionou para ${bairro}`);
-  return [];
+  // Deduplica por link
+  const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
+  const porPortal = {};
+  unicos.forEach(i => { porPortal[i.portal] = (porPortal[i.portal] || 0) + 1; });
+  console.log(`   ✓ ${unicos.length} imoveis total:`, Object.entries(porPortal).map(([k,v]) => `${k}=${v}`).join(', '));
+  return unicos;
 }
 
 async function salvarImoveis(imoveis) {
