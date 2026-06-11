@@ -264,10 +264,10 @@ async function tentarProcessar(session, origem) {
   await processarUsuario(session.user);
 }
 
-// Inicialização principal — detecta hash da URL de confirmação de email
+// Inicialização — detecta hash da URL (#access_token=...&type=signup) ou sessão já ativa
 (async () => {
   try {
-    // 1) onAuthStateChange registrado ANTES de tudo para não perder eventos
+    // onAuthStateChange registrado primeiro para não perder eventos
     sb.auth.onAuthStateChange(async (event, session) => {
       console.log('[SaiuVaga] Auth event:', event, session?.user?.id);
       if (['SIGNED_IN', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event) && session?.user) {
@@ -275,16 +275,16 @@ async function tentarProcessar(session, origem) {
       }
     });
 
-    // 2) Verifica se há hash de confirmação na URL (#access_token=...&type=signup)
+    // Detecta tokens no hash da URL (#access_token=...&refresh_token=...&type=signup)
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace(/^#/, ''));
-    const tokenType = params.get('type');     // 'signup', 'recovery', etc.
-    const accessToken = params.get('access_token');
+    const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
+    const tokenType    = params.get('type'); // 'signup', 'recovery', etc.
 
     if (accessToken && refreshToken) {
       console.log('[SaiuVaga] Hash detectado, tipo:', tokenType);
-      // Força o Supabase a trocar o hash por uma sessão real
+      // Força o Supabase a criar uma sessão a partir dos tokens da URL
       const { data, error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       if (error) {
         console.warn('[SaiuVaga] setSession falhou:', error.message);
@@ -297,26 +297,26 @@ async function tentarProcessar(session, origem) {
       }
     }
 
-    // 3) Sem hash — tenta getSession (Google OAuth ou sessão já ativa)
+    // Sem hash — verifica sessão já ativa (Google OAuth ou login direto)
     const { data: { session } } = await sb.auth.getSession();
     if (session?.user) {
       await tentarProcessar(session, 'getSession-imediato');
       return;
     }
 
-    // 4) Fallback: espera o onAuthStateChange processar o hash automaticamente (até 8s)
-    const timeouts = [1500, 4000, 8000];
-    for (const delay of timeouts) {
-      await new Promise(r => setTimeout(r, delay - (timeouts[timeouts.indexOf(delay) - 1] || 0)));
+    // Fallback: aguarda o onAuthStateChange processar automaticamente (até 8s)
+    let elapsed = 0;
+    for (const wait of [1500, 2500, 4000]) {
+      await new Promise(r => setTimeout(r, wait));
+      elapsed += wait;
       if (jaProcessou) return;
       const { data: { session: s } } = await sb.auth.getSession();
       if (s?.user) {
-        await tentarProcessar(s, `fallback-${delay}ms`);
+        await tentarProcessar(s, `fallback-${elapsed}ms`);
         return;
       }
     }
 
-    // Desistiu após 8s
     if (!jaProcessou) {
       showError('Link de confirmação inválido ou expirado. Solicite um novo cadastro.');
     }
