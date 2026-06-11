@@ -244,15 +244,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
             <input type="range" class="range-slider" id="preco-range" min="500" max="15000" step="100" value="5000" oninput="updatePreco()">
             <div class="range-value" id="preco-label">R$ 5.000</div>
           </div>
-          <div class="filter-row2" style="margin-top:8px">
-            <div>
-              <label class="filter-label" style="margin-bottom:4px">Mínimo</label>
-              <input type="number" class="filter-input" id="preco-min" placeholder="R$ mín" min="0" step="100">
-            </div>
-            <div>
-              <label class="filter-label" style="margin-bottom:4px">Máximo</label>
-              <input type="number" class="filter-input" id="preco-max" placeholder="R$ máx" min="0" step="100" value="5000" oninput="syncRange()">
-            </div>
+          <div style="margin-top:8px">
+              <input type="number" class="filter-input" id="preco-max" placeholder="Ex: 3000" min="0" step="100" value="5000" oninput="syncRange()">
           </div>
         </div>
 
@@ -479,13 +472,13 @@ function syncRange() {
 
 // ── Busca ─────────────────────────────────────────────────────
 async function buscar() {
-  const precoMax  = parseInt(document.getElementById('preco-max').value) || null;
-  const precoMin  = parseInt(document.getElementById('preco-min').value) || null;
-  const quartos   = parseInt(getToggle('quartos-group')) || 0;
+  const precoMax = parseInt(document.getElementById('preco-max').value) || null;
+  const quartos  = parseInt(getToggle('quartos-group')) || 0;
   const tipo      = getToggle('tipo-group');
   const area      = parseInt(getToggle('area-group')) || 0;
   const portal    = getToggle('portal-group');
   const recencia  = parseInt(document.getElementById('recencia').value) || 0;
+  document.getElementById('sort').value = 'recente';
 
   const btn = document.getElementById('btn-buscar');
   const txt = document.getElementById('btn-txt');
@@ -502,7 +495,6 @@ async function buscar() {
       .limit(200);
 
     if (precoMax) query = query.lte('preco', precoMax);
-    if (precoMin) query = query.gte('preco', precoMin);
     if (tipo)    query = query.ilike('tipo', `%${tipo}%`);
     if (portal)  query = query.eq('portal', portal);
     if (recencia > 0) query = query.gte('encontrado_em', new Date(Date.now() - recencia * 3600000).toISOString());
@@ -638,8 +630,8 @@ function irPagina(n) {
 // ── Salvar alerta ─────────────────────────────────────────────
 async function salvarAlerta() {
   if (!userId) return;
-  const precoMax  = parseInt(document.getElementById('preco-max').value) || null;
-  const quartos   = parseInt(getToggle('quartos-group')) || 0;
+  const precoMax = parseInt(document.getElementById('preco-max').value) || null;
+  const quartos  = parseInt(getToggle('quartos-group')) || 0;
   const tipo      = getToggle('tipo-group');
   const area      = parseInt(getToggle('area-group')) || 0;
 
@@ -679,7 +671,6 @@ function atualizarBotaoAlerta(salvo) {
 // ── Limpar ────────────────────────────────────────────────────
 function limpar() {
   bairros = []; renderChips();
-  document.getElementById('preco-min').value = '';
   document.getElementById('preco-max').value = '5000';
   document.getElementById('preco-range').value = 5000;
   updatePreco();
