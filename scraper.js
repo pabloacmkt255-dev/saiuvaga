@@ -37,31 +37,24 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   let phone = telefone.replace(/\D/g, '');
   if (!phone.startsWith('55')) phone = '55' + phone;
 
-  const MAX_TENTATIVAS = 2;
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-    try {
-      const res = await axios.post(
-        `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`,
-        { phone, message: mensagem },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Client-Token': ZAPI_CLIENT_TOKEN
-          },
-          timeout: 15000,
+  try {
+    const res = await axios.post(
+      `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`,
+      { phone, message: mensagem },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Client-Token': ZAPI_CLIENT_TOKEN
         }
-      );
-      console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
-      return true;
-    } catch (err) {
-      const detail = err.response?.data?.message || err.message;
-      console.error(`   _ Erro Z-API (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${detail}`);
-      if (tentativa < MAX_TENTATIVAS) {
-        await new Promise(r => setTimeout(r, 3000));
       }
-    }
+    );
+    console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
+    return true;
+  } catch (err) {
+    const detail = err.response?.data?.message || err.message;
+    console.error(`   _ Erro Z-API: ${detail}`);
+    return false;
   }
-  return false;
 }
 
 // -- Servidor Express ----------------------------------------
@@ -140,93 +133,6 @@ app.get('/webhook', (req, res) => {
 });
 
 // -- Funcao de processar mensagem (chatbot Groq) --------------
-// ─── Extrai intenção de busca via Groq ───────────────────────────────────────
-async function extrairIntencaoBusca(text) {
-  try {
-    const resposta = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        model: 'llama-3.1-8b-instant',
-        messages: [{
-          role: 'user',
-          content: `Analise a mensagem abaixo e extraia a intenção de busca de imóvel para aluguel em São Paulo.
-Responda APENAS com um JSON válido, sem texto adicional:
-{
-  "ehBusca": true/false,
-  "bairros": ["bairro1", "bairro2"],
-  "precoMax": 0,
-  "quartos": 0,
-  "tipo": ""
-}
-Regras:
-- ehBusca = true se a pessoa quer buscar/encontrar imóvel para alugar agora
-- bairros: lista de bairros mencionados (vazio se não mencionou)
-- precoMax: valor máximo em reais (0 se não mencionou)
-- quartos: número mínimo de quartos (0 se não mencionou)
-- tipo: "apartamento", "casa", "kitnet" ou "" se não especificou
-- Se for só uma pergunta geral sobre o produto/preço/como funciona, ehBusca = false
-
-Mensagem: "${text.replace(/"/g, '\'')}"`,
-        }],
-        max_tokens: 150,
-        temperature: 0.1,
-      },
-      { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` } }
-    );
-    const raw = resposta.data?.choices?.[0]?.message?.content || '{}';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
-  } catch (e) {
-    return { ehBusca: false };
-  }
-}
-
-// ─── Busca imóveis no banco conforme intenção ─────────────────────────────────
-async function buscarImoveisParaUsuario(intencao) {
-  try {
-    let query = supabase
-      .from('imoveis')
-      .select('titulo, preco, bairro, tipo, portal, link, encontrado_em')
-      .order('encontrado_em', { ascending: false })
-      .limit(5);
-
-    if (intencao.precoMax > 0) query = query.lte('preco', intencao.precoMax);
-    if (intencao.tipo) query = query.ilike('tipo', `%${intencao.tipo}%`);
-
-    // Se mencionou bairros, busca por qualquer um deles
-    if (intencao.bairros && intencao.bairros.length > 0) {
-      const filtros = intencao.bairros.map(b => `bairro.ilike.%${b}%`).join(',');
-      query = query.or(filtros);
-    }
-
-    const { data } = await query;
-    return data || [];
-  } catch (e) {
-    console.error('Erro busca imóveis:', e.message);
-    return [];
-  }
-}
-
-// ─── Formata lista de imóveis para WhatsApp ───────────────────────────────────
-function formatarImoveisWpp(imoveis, intencao) {
-  if (imoveis.length === 0) {
-    const bairros = intencao.bairros?.join(', ') || 'São Paulo';
-    return `🔍 Não encontrei imóveis disponíveis agora para ${bairros} com esses critérios.\n\nNossa base é atualizada a cada 4h. Configure seus alertas em saiuvaga.com.br/saiuvaga-alertas.html para ser avisado assim que surgir uma vaga! 🔔`;
-  }
-
-  let msg = `🏠 *Encontrei ${imoveis.length} imóvel(is) disponíveis:*\n\n`;
-  imoveis.forEach((im, i) => {
-    const preco = im.preco ? `R$${Number(im.preco).toLocaleString('pt-BR')}/mês` : 'Consulte';
-    msg += `*${i + 1}. ${im.bairro || 'SP'}*\n`;
-    msg += `${im.titulo || 'Imóvel disponível'}\n`;
-    msg += `💰 ${preco} · ${im.portal}\n`;
-    msg += `🔗 ${im.link}\n\n`;
-  });
-  msg += `_Quer receber novos imóveis assim que saírem? Configure seus alertas em saiuvaga.com.br/saiuvaga-alertas.html_`;
-  return msg;
-}
-
-// ─── Processa mensagem recebida no WhatsApp ───────────────────────────────────
 async function processarMensagem(phone, text) {
   try {
     const numero = phone.replace(/\D/g, '').replace(/^55/, '');
@@ -241,19 +147,6 @@ async function processarMensagem(phone, text) {
     const ativo = user?.ativo && validade && validade > agora;
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
-    // ── Detecta se é busca de imóvel ──────────────────────────────────────────
-    const intencao = await extrairIntencaoBusca(text);
-
-    if (intencao.ehBusca) {
-      // Usuário quer buscar imóvel agora — faz busca real no banco
-      const imoveis = await buscarImoveisParaUsuario(intencao);
-      const mensagem = formatarImoveisWpp(imoveis, intencao);
-      await enviarWhatsApp(phone, null, mensagem);
-      console.log(`   🔍 Busca via WPP: ${imoveis.length} resultado(s) → ${phone}`);
-      return;
-    }
-
-    // ── Resposta geral via Groq ───────────────────────────────────────────────
     let contextoUsuario = 'Usuario nao cadastrado no SaiuVaga.';
     if (user) {
       if (ativo && user.plano === 'trial') {
@@ -277,7 +170,6 @@ INFORMACOES DO PRODUTO:
 - Plano Trimestral: R$38/3 meses (1 mes gratis)
 - Site: saiuvaga.com.br
 - Para cadastrar: saiuvaga.com.br/saiuvaga-cadastro.html
-- Configurar alertas: saiuvaga.com.br/saiuvaga-alertas.html
 
 CONTEXTO DO USUARIO ATUAL:
 ${contextoUsuario}
@@ -291,7 +183,6 @@ REGRAS:
 - Se perguntarem sobre preco, sempre mencione o trial gratuito primeiro
 - Se o trial expirou, incentive o pagamento gentilmente
 - Nunca seja robotico - seja humano e empatico
-- Se o usuario quiser buscar imoveis, sugira que ele configure os alertas no link acima
 
 MENSAGEM DO USUARIO:
 ${text}
@@ -634,14 +525,9 @@ app.post('/api/whatsapp/webhook', (req, res) => res.sendStatus(200));
 const supabaseAdmin = require('@supabase/supabase-js')
   .createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET) console.warn('⚠️  ADMIN_SECRET nao configurado — rotas /api/admin desativadas');
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'saiuvaga2024admin';
 
 function verificarAdmin(req, res) {
-  if (!ADMIN_SECRET) {
-    res.status(503).json({ erro: 'Admin nao configurado' });
-    return false;
-  }
   const auth = req.headers['authorization'] || '';
   const senha = auth.replace('Bearer ', '').trim();
   if (senha !== ADMIN_SECRET) {
@@ -687,59 +573,28 @@ app.get('/api/admin/payments', async (req, res) => {
 
 // Busca imoveis via Apify actor fatihtahta/zap-imoveis-scraper
 async function buscarViaApify(bairro) {
-  const token = process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN;
+  const token = process.env.APIFY_TOKEN;
   if (!token) return null;
 
   const slug = toSlug(bairro);
-  // Usa cheerio-scraper (muito mais barato que zap-imoveis-scraper)
-  // Tenta ZAP direto primeiro, depois VivaReal como fallback
-  const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
   const input = {
-    startUrls: [{ url: targetUrl }],
-    maxCrawlingDepth: 0,
-    maxResultsPerCrawl: 24,
-    pageFunction: `async function pageFunction(context) {
-      const { $ } = context;
-      const items = [];
-      const nextDataEl = $('script#__NEXT_DATA__');
-      if (nextDataEl.length) {
-        try {
-          const parsed = JSON.parse(nextDataEl.html());
-          const listings =
-            parsed?.props?.pageProps?.initialProps?.listings ||
-            parsed?.props?.pageProps?.listings ||
-            parsed?.props?.pageProps?.search?.result?.listings || [];
-          listings.forEach(l => {
-            const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-            const href = l?.link?.href || '';
-            const link = href ? 'https://www.zapimoveis.com.br' + href : '';
-            const titulo = l?.listing?.title || 'Imovel ZAP';
-            const quartos = l?.listing?.bedrooms || null;
-            const area = l?.listing?.usableAreas?.[0] || null;
-            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link, quartos, area });
-          });
-        } catch(e) {}
-      }
-      return items;
-    }`,
+    location: `${bairro}, Sao Paulo`,
+    limit: 48,
+    maximize_coverage: false,
+    below_market_price: false,
+    near_transit: false,
   };
 
   try {
+    // Dispara o actor e aguarda resultado
     const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
+      `https://api.apify.com/v2/acts/fatihtahta~zap-imoveis-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=256`,
       input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
+      { headers: { 'Content-Type': 'application/json' }, timeout: 130000 }
     );
 
     const items = runRes.data || [];
     if (!Array.isArray(items) || items.length === 0) return [];
-
-    // cheerio-scraper retorna items diretos já mapeados
-    if (items[0]?.link) {
-      return items
-        .filter(i => i.preco > 0 && i.link?.length > 20)
-        .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'ZAP' }));
-    }
 
     return items
       .filter(i => {
@@ -805,240 +660,19 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
-// ─── VIVA REAL via Apify dedicado + ScraperAPI dedicado ──────────────────────
-// ─── VIVA REAL via Apify (token principal) + ScraperAPI (fallback) ───────────
-async function buscarVivaRealApify(bairro) {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return [];
-  const slug = toSlug(bairro);
-  // Actor genérico do Apify que faz scraping com Cheerio
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
-  const input = {
-    startUrls: [{ url: targetUrl }],
-    maxCrawlingDepth: 0,
-    maxResultsPerCrawl: 24,
-    pageFunction: `async function pageFunction(context) {
-      const { $ } = context;
-      const items = [];
-      const nextDataEl = $('script#__NEXT_DATA__');
-      if (nextDataEl.length) {
-        try {
-          const parsed = JSON.parse(nextDataEl.html());
-          const listings =
-            parsed?.props?.pageProps?.initialState?.results?.listings ||
-            parsed?.props?.pageProps?.results?.listings || [];
-          listings.forEach(l => {
-            const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-            const href = l?.link?.href || '';
-            const link = href ? 'https://www.vivareal.com.br' + href : '';
-            const titulo = l?.listing?.title || 'Imovel VivaReal';
-            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
-          });
-        } catch(e) {}
-      }
-      return items;
-    }`,
-  };
-  try {
-    const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
-      input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-    );
-    const items = runRes.data || [];
-    if (!Array.isArray(items) || items.length === 0) return [];
-    return items
-      .filter(i => i.preco > 0 && i.link?.length > 20)
-      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'VivaReal' }));
-  } catch (e) {
-    console.log(`   ⚠️  VivaReal Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  }
-}
-
-async function buscarVivaRealScraperAPI(bairro) {
-  const scraperKey = process.env.SCRAPERAPI_KEY;
-  if (!scraperKey) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
-  const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
-  try {
-    const { data: html } = await axios.get(proxyUrl, {
-      headers: { 'Accept': 'text/html', 'Accept-Language': 'pt-BR,pt;q=0.9' },
-      timeout: 60000,
-    });
-    const $ = cheerio.load(html);
-    const imoveis = [];
-    // Estratégia 1: __NEXT_DATA__
-    const nextData = $('script#__NEXT_DATA__').html();
-    if (nextData) {
-      try {
-        const parsed = JSON.parse(nextData);
-        const listings =
-          parsed?.props?.pageProps?.initialState?.results?.listings ||
-          parsed?.props?.pageProps?.results?.listings || [];
-        listings.forEach(l => {
-          const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-          const href = l?.link?.href || '';
-          const link = href ? `https://www.vivareal.com.br${href}` : '';
-          const titulo = l?.listing?.title || `Imovel VivaReal - ${bairro}`;
-          if (preco > 0 && link.length > 20) {
-            imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'VivaReal', link });
-          }
-        });
-      } catch(pe) {}
-    }
-    // Estratégia 2: __INITIAL_STATE__ inline
-    if (imoveis.length === 0) {
-      $('script').each((_, el) => {
-        const src = $(el).html() || '';
-        if (src.includes('__INITIAL_STATE__') && src.includes('listings')) {
-          try {
-            const match = src.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\})\s*;/);
-            if (match) {
-              const state = JSON.parse(match[1]);
-              (state?.results?.listings || []).forEach(l => {
-                const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-                const link = l?.link?.href ? `https://www.vivareal.com.br${l.link.href}` : '';
-                const titulo = l?.listing?.title || `Imovel VivaReal - ${bairro}`;
-                if (preco > 0 && link.length > 20) {
-                  imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'VivaReal', link });
-                }
-              });
-            }
-          } catch(pe) {}
-        }
-      });
-    }
-    return imoveis;
-  } catch (e) {
-    console.log(`   ⚠️  VivaReal ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
-    return [];
-  }
-}
-
-async function buscarVivaRealDireto(bairro) {
-  // 1) Apify (token principal)
-  if (process.env.APIFY_TOKEN) {
-    const result = await buscarVivaRealApify(bairro);
-    if (result.length > 0) return result;
-  }
-  // 2) ScraperAPI (token principal)
-  if (process.env.SCRAPERAPI_KEY) {
-    const result = await buscarVivaRealScraperAPI(bairro);
-    if (result.length > 0) return result;
-  }
-  return [];
-}
-
-// ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
-async function buscarMercadoLivre(bairro) { return []; }
-
-// ─── OLX via Apify (token principal) + ScraperAPI (fallback) ─────────────────
-async function buscarOLXApify(bairro) {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
-  const input = {
-    startUrls: [{ url: targetUrl }],
-    maxCrawlingDepth: 0,
-    maxResultsPerCrawl: 24,
-    pageFunction: `async function pageFunction(context) {
-      const { $ } = context;
-      const items = [];
-      const nextDataEl = $('script#__NEXT_DATA__');
-      if (nextDataEl.length) {
-        try {
-          const parsed = JSON.parse(nextDataEl.html());
-          const ads = parsed?.props?.pageProps?.ads
-            || parsed?.props?.pageProps?.listingProps?.ads || [];
-          ads.forEach(ad => {
-            const preco = parseInt((ad.price || '').replace(/\\D/g, '')) || 0;
-            const link = ad.url || ad.linkUrl || '';
-            const titulo = ad.title || 'Imovel OLX';
-            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
-          });
-        } catch(e) {}
-      }
-      return items;
-    }`,
-  };
-  try {
-    const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
-      input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-    );
-    const items = runRes.data || [];
-    if (!Array.isArray(items) || items.length === 0) return [];
-    return items
-      .filter(i => i.preco > 0 && i.link?.length > 20)
-      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'OLX' }));
-  } catch (e) {
-    console.log(`   ⚠️  OLX Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  }
-}
-
-async function buscarOLXScraperAPI(bairro) {
-  const scraperKey = process.env.SCRAPERAPI_KEY;
-  if (!scraperKey) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
-  const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
-  try {
-    const { data: html } = await axios.get(proxyUrl, {
-      headers: { 'Accept': 'text/html' },
-      timeout: 60000,
-    });
-    const $ = cheerio.load(html);
-    const imoveis = [];
-    const nextData = $('script#__NEXT_DATA__').html();
-    if (nextData) {
-      try {
-        const parsed = JSON.parse(nextData);
-        const ads = parsed?.props?.pageProps?.ads
-          || parsed?.props?.pageProps?.listingProps?.ads || [];
-        ads.forEach(ad => {
-          const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
-          const link = ad.url || ad.linkUrl || '';
-          const titulo = ad.title || `Imovel OLX - ${bairro}`;
-          if (preco > 0 && link.length > 20) {
-            imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
-          }
-        });
-      } catch(pe) {
-        console.log(`   ⚠️  OLX ScraperAPI parse falhou para ${bairro}: ${pe.message?.slice(0,40)}`);
-      }
-    }
-    return imoveis;
-  } catch (e) {
-    console.log(`   ⚠️  OLX ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
-    return [];
-  }
-}
-
-// Orquestra OLX: Apify primeiro, ScraperAPI como fallback
-async function buscarOLXHtml(bairro) {
-  if (process.env.APIFY_TOKEN) {
-    const result = await buscarOLXApify(bairro);
-    if (result.length > 0) return result;
-  }
-  if (process.env.SCRAPERAPI_KEY) {
-    return buscarOLXScraperAPI(bairro);
-  }
-  return [];
-}
-
-// Bairros fixos — apenas quando não há alertas configurados para o bairro
-// O scraper prioriza bairros com alertas ativos (ver rodarScraper)
 const BUSCAS = [
+  // Bairros originais
   { bairro: 'Pinheiros',      region: 'pinheiros'      },
   { bairro: 'Vila Madalena',  region: 'vila-madalena'  },
+  { bairro: 'Faria Lima',     region: 'faria-lima'     },
   { bairro: 'Moema',          region: 'moema'          },
   { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
+  // Novos bairros
+  { bairro: 'Jardins',        region: 'jardins'        },
+  { bairro: 'Vila Olimpia',   region: 'vila-olimpia'   },
+  { bairro: 'Brooklin',       region: 'brooklin'       },
   { bairro: 'Perdizes',       region: 'perdizes'       },
+  { bairro: 'Consolacao',     region: 'consolacao'     },
 ];
 
 function toSlug(str) {
@@ -1048,196 +682,77 @@ function toSlug(str) {
     .replace(/[^a-z0-9-]/g, '');
 }
 
-// Busca ZAP direto — tenta VivaReal glue-api primeiro (mais permissiva com IPs de servidor),
-// depois ZAP glue-api. Apify só como backup emergencial.
-async function buscarZapDireto(bairro) {
+async function buscarZap(bairro) {
   const slug = toSlug(bairro);
-  const PAGE_SIZE = 48;
-
-  const UAS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  ];
-  const ua = UAS[Math.floor(Math.random() * UAS.length)];
-
-  // ── Tentativa 1: VivaReal glue-api (mesma infra do ZAP, IP de servidor aceito com mais frequência)
-  try {
-    const headersVR = {
-      'User-Agent': ua,
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-      'x-domain': 'www.vivareal.com.br',
-      'Origin': 'https://www.vivareal.com.br',
-      'Referer': 'https://www.vivareal.com.br/',
-    };
-    const urlVR = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
-    const { data } = await axios.get(urlVR, { headers: headersVR, timeout: 30000 });
-    const listings = data?.search?.result?.listings || [];
-    const imoveis = listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'VivaReal',
-        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
-    if (imoveis.length > 0) {
-      console.log(`   ✅ VivaReal glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
-      return imoveis;
-    }
-  } catch (e) {
-    console.log(`   __ VivaReal glue-api falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
-  }
-
-  // ── Tentativa 2: ZAP glue-api com headers atualizados (Chrome 125)
-  try {
-    const headersZAP = {
-      'User-Agent': ua,
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'x-domain': 'www.zapimoveis.com.br',
-      'Origin': 'https://www.zapimoveis.com.br',
-      'Referer': 'https://www.zapimoveis.com.br/',
-      'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-site': 'same-site',
-    };
-    const urlZAP = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
-    const { data } = await axios.get(urlZAP, { headers: headersZAP, timeout: 30000 });
-    const listings = data?.search?.result?.listings || [];
-    const imoveis = listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'ZAP',
-        link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
-    if (imoveis.length > 0) {
-      console.log(`   ✅ ZAP glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
-      return imoveis;
-    }
-  } catch (e) {
-    // propaga para o chamador acionar o fallback de proxy
-    throw e;
-  }
-
-  throw new Error('Nenhum resultado nas glue-apis (VivaReal e ZAP)');
-}
-
-// Fallback via proxy pago — tenta VivaReal glue-api primeiro, depois ZAP
-async function buscarZapViaProxy(bairro) {
-  const slug = toSlug(bairro);
-  const PAGE_SIZE = 48;
-
-  // Tenta VivaReal via proxy
-  try {
-    const headersVR = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'x-domain': 'www.vivareal.com.br',
-      'Origin': 'https://www.vivareal.com.br',
-      'Referer': 'https://www.vivareal.com.br/',
-    };
-    const urlVR = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
-    const { data } = await axiosProxy(urlVR, headersVR, 45000);
-    const listings = data?.search?.result?.listings || [];
-    const imoveis = listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'VivaReal',
-        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
-    if (imoveis.length > 0) return imoveis;
-  } catch (e) {
-    console.log(`   __ Proxy VivaReal glue-api falhou: ${e.message?.slice(0, 50)}`);
-  }
-
-  // Tenta ZAP via proxy
-  const headersZAP = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'x-domain': 'www.zapimoveis.com.br',
     'Origin': 'https://www.zapimoveis.com.br',
     'Referer': 'https://www.zapimoveis.com.br/',
   };
-  const urlZAP = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
-  const { data } = await axiosProxy(urlZAP, headersZAP, 45000);
-  const listings = data?.search?.result?.listings || [];
-  return listings
-    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-    .map(i => ({
-      titulo: i.listing.title || `Imovel - ${bairro}`,
-      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-      bairro, tipo: 'residencial', portal: 'ZAP',
-      link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
-    }))
-    .filter(i => i.preco > 0 && i.link.length > 30);
+  const PAGE_SIZE = 48;
+  const PAGES = 1; // 1 pagina _ 48 = ate 48 imoveis por bairro (economia de creditos ScraperAPI)
+  const todos = [];
+
+  for (let page = 0; page < PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=${from}`;
+    try {
+      const { data } = await axiosProxy(url, headers, 45000);
+      const listings = data?.search?.result?.listings || [];
+      if (listings.length === 0) break; // sem mais paginas
+      const imoveis = listings
+        .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+        .map(i => ({
+          titulo: i.listing.title || `Imovel - ${bairro}`,
+          preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+          bairro, tipo: 'residencial', portal: 'ZAP',
+          link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+        }))
+        .filter(i => i.preco > 0 && i.link.length > 30);
+      todos.push(...imoveis);
+      if (listings.length < PAGE_SIZE) break; // ultima pagina
+      await new Promise(r => setTimeout(r, 1000)); // delay entre paginas
+    } catch (e) {
+      console.log(`   ⚠_ ZAP pagina ${page + 1}: ${e.message?.slice(0, 50)}`);
+      break;
+    }
+  }
+  return todos;
 }
 
+// VivaReal descontinuou glue-api.vivareal.com.br (DNS inexistente desde 2024).
+// OLX Group unificou ZAP + VivaReal na mesma infraestrutura.
+// Volume compensado com paginacao do ZAP (3 paginas _ 48) + 5 bairros novos.
+async function buscarVivaReal(bairro) {
+  return []; // desativado - DNS descontinuado
+}
 
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // Roda todas as fontes grátis em paralelo para máxima cobertura
-  const [zapDireto, vivaReal, mercadoLivre, olxHtml] = await Promise.allSettled([
-    buscarZapDireto(bairro),
-    buscarVivaRealDireto(bairro),
-    buscarMercadoLivre(bairro),
-    buscarOLXHtml(bairro),
-  ]);
-
-  const todos = [
-    ...(zapDireto.status === 'fulfilled' ? zapDireto.value : []),
-    ...(vivaReal.status === 'fulfilled' ? vivaReal.value : []),
-    ...(mercadoLivre.status === 'fulfilled' ? mercadoLivre.value : []),
-    ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
-  ];
-
-  // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
-  let apifyZapCount = 0;
-  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN)) {
-    try {
-      const apifyResult = await buscarViaApify(bairro);
-      if (apifyResult && apifyResult.length > 0) {
-        todos.push(...apifyResult);
-        apifyZapCount = apifyResult.length;
-        console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
-      }
-    } catch (e) {
-      console.log(`   __ Apify ZAP falhou: ${e.message?.slice(0, 50)}`);
+  // Tenta Apify primeiro (actor dedicado ZAP)
+  if (process.env.APIFY_TOKEN) {
+    const apifyResult = await buscarViaApify(bairro);
+    if (apifyResult !== null) {
+      const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
+      console.log(`   ✓ ${unicos.length} imoveis via Apify`);
+      return unicos;
     }
+    console.log(`   __ Apify falhou, tentando ZAP direto...`);
   }
 
-  // Proxy como último recurso (raramente necessário)
-  if (todos.length === 0) {
-    console.log(`   ⚠️  Tentando proxy como último recurso...`);
-    try {
-      const imoveis = await buscarZapViaProxy(bairro);
-      todos.push(...imoveis);
-    } catch (e) {
-      console.log(`   __ Proxy falhou: ${e.message?.slice(0, 50)}`);
-    }
+  // Fallback: ZAP via ScraperAPI
+  try {
+    const imoveis = await buscarZap(bairro);
+    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+    console.log(`   ✓ ${unicos.length} imoveis via ZAP/ScraperAPI`);
+    return unicos;
+  } catch (e) {
+    console.log(`   ⚠_ ZAP: ${e.message?.slice(0, 60)}`);
+    return [];
   }
-
-  // Diagnóstico por fonte (ZAP inclui Apify se foi usado)
-  const zapCount = zapDireto.status==='fulfilled' ? (zapDireto.value?.length||0) : apifyZapCount;
-  const zapLabel = zapDireto.status==='fulfilled' ? zapCount : (apifyZapCount > 0 ? `Apify:${apifyZapCount}` : 'ERR');
-  console.log(`   📊 Fontes brutas: ZAP=${zapLabel} VivaReal=${vivaReal.status==='fulfilled'?vivaReal.value?.length||0:'ERR'} OLX=${olxHtml.status==='fulfilled'?olxHtml.value?.length||0:'ERR'} ML=${mercadoLivre.status==='fulfilled'?mercadoLivre.value?.length||0:'ERR'}`);
-
-  // Deduplica por link
-  const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
-  const porPortal = {};
-  unicos.forEach(i => { porPortal[i.portal] = (porPortal[i.portal] || 0) + 1; });
-  console.log(`   ✓ ${unicos.length} imoveis total:`, Object.entries(porPortal).map(([k,v]) => `${k}=${v}`).join(', '));
-  return unicos;
 }
 
 async function salvarImoveis(imoveis) {
@@ -1253,87 +768,49 @@ async function salvarImoveis(imoveis) {
 }
 
 async function verificarAlertas() {
-  // Busca usuários ativos com alerta configurado nas colunas alerta_*
-  const { data: usuarios } = await supabase
-    .from('users')
-    .select('id, whatsapp, alerta_bairros, alerta_tipos, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max, plano_validade')
-    .eq('ativo', true)
-    .not('whatsapp', 'is', null)
-    .not('alerta_bairros', 'is', null);
+  const { data: filtros } = await supabase
+    .from('filtros')
+    .select('*, users(whatsapp, ativo, plano_validade)')
+    .eq('ativo', true);
 
-  if (!usuarios || usuarios.length === 0) {
-    console.log('   ℹ️  Nenhum usuário com alerta configurado.');
-    return;
-  }
+  if (!filtros || filtros.length === 0) return;
 
-  for (const usuario of usuarios) {
-    // Checa validade do plano
-    const validade = usuario.plano_validade ? new Date(usuario.plano_validade) : null;
+  for (const filtro of filtros) {
+    const whatsapp = filtro.users?.whatsapp;
+    if (!whatsapp || !filtro.users?.ativo) continue;
+
+    // Checa se o plano ainda está dentro da validade
+    const validade = filtro.users?.plano_validade ? new Date(filtro.users.plano_validade) : null;
     if (!validade || validade <= new Date()) continue;
 
-    // Horário de silêncio
-    if (usuario.alerta_silencio_inicio && usuario.alerta_silencio_fim) {
-      const hora = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours(); // BRT = UTC-3
-      const ini  = parseInt(usuario.alerta_silencio_inicio);
-      const fim  = parseInt(usuario.alerta_silencio_fim);
-      const emSilencio = ini > fim
-        ? (hora >= ini || hora < fim)
-        : (hora >= ini && hora < fim);
-      if (emSilencio) continue;
-    }
+    const { data: matches } = await supabase
+      .from('imoveis')
+      .select('*')
+      .ilike('bairro', `%${filtro.bairro}%`)
+      .lte('preco', filtro.preco_max)
+      .gte('encontrado_em', new Date(Date.now() - 65 * 60 * 1000).toISOString()); // 65min - cobre o ciclo de 60min
 
-    const bairros    = usuario.alerta_bairros   || [];
-    const precoMax   = usuario.alerta_preco_max  || 99999;
-    const quartosMin = parseInt(usuario.alerta_quartos_min) || 0;
-    const areaMin    = parseInt(usuario.alerta_area_min)    || 0;
-    const freqMax    = usuario.alerta_freq_max === 'ilimitado' ? 9999 : parseInt(usuario.alerta_freq_max) || 9999;
+    if (!matches || matches.length === 0) continue;
 
-    // Conta alertas enviados hoje (controle de frequência)
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const { count: alertasHoje } = await supabase
-      .from('alertas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', usuario.id)
-      .gte('created_at', hoje.toISOString());
-    if ((alertasHoje || 0) >= freqMax) continue;
+    for (const imovel of matches) {
+      const { data: jaEnviado } = await supabase
+        .from('alertas')
+        .select('id')
+        .eq('user_id', filtro.user_id)
+        .eq('imovel_id', imovel.id)
+        .maybeSingle();
 
-    // Busca imóveis novos (últimos 65 min) que batem com os filtros do usuário
-    for (const bairro of bairros) {
-      const { data: matches } = await supabase
-        .from('imoveis')
-        .select('*')
-        .ilike('bairro', `%${bairro}%`)
-        .lte('preco', precoMax)
-        .gte('encontrado_em', new Date(Date.now() - 300 * 60 * 1000).toISOString()); // 5h — cobre ciclo de 4h com folga
+      if (jaEnviado) continue;
 
-      if (!matches || matches.length === 0) continue;
+      await supabase.from('alertas').insert({
+        user_id: filtro.user_id,
+        filtro_id: filtro.id,
+        imovel_id: imovel.id,
+      });
 
-      for (const imovel of matches) {
-        // Filtros adicionais
-        if (quartosMin > 0 && (imovel.quartos || 0) < quartosMin) continue;
-        if (areaMin   > 0 && (imovel.area    || 0) < areaMin)    continue;
-        const tipos = usuario.alerta_tipos || [];
-        if (tipos.length > 0 && imovel.tipo && !tipos.includes(imovel.tipo)) continue;
-
-        // Evita reenvio
-        const { data: jaEnviado } = await supabase
-          .from('alertas')
-          .select('id')
-          .eq('user_id', usuario.id)
-          .eq('imovel_id', imovel.id)
-          .maybeSingle();
-        if (jaEnviado) continue;
-
-        // Registra e envia
-        await supabase.from('alertas').insert({
-          user_id:   usuario.id,
-          imovel_id: imovel.id,
-        });
-
-        await enviarWhatsApp(usuario.whatsapp, imovel);
-        console.log(`   🔔 Alerta: ${imovel.titulo} → ${usuario.whatsapp}`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
+      await enviarWhatsApp(whatsapp, imovel);
+      console.log(`   🔔 Alerta: ${imovel.titulo} → ${whatsapp}`);
+      await new Promise(r => setTimeout(r, 1000));
     }
   }
 }
@@ -1341,29 +818,7 @@ async function verificarAlertas() {
 async function rodarScraper() {
   console.log(`\n🚀 SaiuVaga - ${new Date().toLocaleString('pt-BR')}`);
   let total = 0;
-
-  // Prioridade 1: bairros com alertas ativos (evita buscar bairros sem usuários)
-  const { data: usuarios } = await supabase
-    .from('users')
-    .select('alerta_bairros')
-    .eq('ativo', true)
-    .not('alerta_bairros', 'is', null);
-
-  const bairrosComAlerta = new Set();
-  (usuarios || []).forEach(u => (u.alerta_bairros || []).forEach(b => bairrosComAlerta.add(b)));
-
-  let bairrosParaBuscar;
-  if (bairrosComAlerta.size > 0) {
-    // Busca apenas bairros que têm alertas configurados
-    bairrosParaBuscar = [...bairrosComAlerta].map(b => ({ bairro: b, region: toSlug(b) }));
-    console.log(`   📋 Bairros com alertas: ${[...bairrosComAlerta].join(', ')}`);
-  } else {
-    // Sem alertas — usa lista fixa mínima para popular o banco
-    bairrosParaBuscar = BUSCAS;
-    console.log(`   📋 Sem alertas — usando bairros padrão`);
-  }
-
-  for (const b of bairrosParaBuscar) {
+  for (const b of BUSCAS) {
     const imoveis = await buscarOLX(b.bairro, b.region);
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
@@ -1372,5 +827,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
-cron.schedule('0 */4 * * *', rodarScraper); // 1x a cada 4h — preserva free tiers
+cron.schedule('0 * * * *', rodarScraper); // 1x por hora, no minuto 0
 rodarScraper();
