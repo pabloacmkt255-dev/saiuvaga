@@ -682,7 +682,49 @@ function toSlug(str) {
     .replace(/[^a-z0-9-]/g, '');
 }
 
-async function buscarZap(bairro) {
+// Busca ZAP direto — sem proxy, sem custo. Apify só como backup emergencial.
+async function buscarZapDireto(bairro) {
+  const slug = toSlug(bairro);
+  // User-Agents rotativos para reduzir chance de bloqueio
+  const UAS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  ];
+  const ua = UAS[Math.floor(Math.random() * UAS.length)];
+  const headers = {
+    'User-Agent': ua,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+    'x-domain': 'www.zapimoveis.com.br',
+    'Origin': 'https://www.zapimoveis.com.br',
+    'Referer': 'https://www.zapimoveis.com.br/',
+  };
+  const PAGE_SIZE = 48;
+  const todos = [];
+
+  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+  try {
+    const { data } = await axios.get(url, { headers, timeout: 30000 });
+    const listings = data?.search?.result?.listings || [];
+    const imoveis = listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel - ${bairro}`,
+        preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'ZAP',
+        link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+    todos.push(...imoveis);
+  } catch (e) {
+    throw e; // propaga para o chamador decidir o fallback
+  }
+  return todos;
+}
+
+// Fallback via proxy pago (ScraperAPI/BrightData) — reserva, raramente usado
+async function buscarZapViaProxy(bairro) {
   const slug = toSlug(bairro);
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -692,67 +734,62 @@ async function buscarZap(bairro) {
     'Referer': 'https://www.zapimoveis.com.br/',
   };
   const PAGE_SIZE = 48;
-  const PAGES = 1; // 1 pagina _ 48 = ate 48 imoveis por bairro (economia de creditos ScraperAPI)
-  const todos = [];
-
-  for (let page = 0; page < PAGES; page++) {
-    const from = page * PAGE_SIZE;
-    const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=${from}`;
-    try {
-      const { data } = await axiosProxy(url, headers, 45000);
-      const listings = data?.search?.result?.listings || [];
-      if (listings.length === 0) break; // sem mais paginas
-      const imoveis = listings
-        .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-        .map(i => ({
-          titulo: i.listing.title || `Imovel - ${bairro}`,
-          preco: parseInt(i.listing.pricingInfos[0].price) || 0,
-          bairro, tipo: 'residencial', portal: 'ZAP',
-          link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
-        }))
-        .filter(i => i.preco > 0 && i.link.length > 30);
-      todos.push(...imoveis);
-      if (listings.length < PAGE_SIZE) break; // ultima pagina
-      await new Promise(r => setTimeout(r, 1000)); // delay entre paginas
-    } catch (e) {
-      console.log(`   ⚠_ ZAP pagina ${page + 1}: ${e.message?.slice(0, 50)}`);
-      break;
-    }
-  }
-  return todos;
+  const url = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=${PAGE_SIZE}&from=0`;
+  const { data } = await axiosProxy(url, headers, 45000);
+  const listings = data?.search?.result?.listings || [];
+  return listings
+    .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+    .map(i => ({
+      titulo: i.listing.title || `Imovel - ${bairro}`,
+      preco: parseInt(i.listing.pricingInfos[0].price) || 0,
+      bairro, tipo: 'residencial', portal: 'ZAP',
+      link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+    }))
+    .filter(i => i.preco > 0 && i.link.length > 30);
 }
 
-// VivaReal descontinuou glue-api.vivareal.com.br (DNS inexistente desde 2024).
-// OLX Group unificou ZAP + VivaReal na mesma infraestrutura.
-// Volume compensado com paginacao do ZAP (3 paginas _ 48) + 5 bairros novos.
-async function buscarVivaReal(bairro) {
-  return []; // desativado - DNS descontinuado
-}
+// VivaReal desativado (DNS descontinuado desde 2024)
+async function buscarVivaReal(bairro) { return []; }
 
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // Tenta Apify primeiro (actor dedicado ZAP)
-  if (process.env.APIFY_TOKEN) {
-    const apifyResult = await buscarViaApify(bairro);
-    if (apifyResult !== null) {
-      const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
-      console.log(`   ✓ ${unicos.length} imoveis via Apify`);
-      return unicos;
-    }
-    console.log(`   __ Apify falhou, tentando ZAP direto...`);
-  }
-
-  // Fallback: ZAP via ScraperAPI
+  // 1) ZAP direto — grátis, fonte principal
   try {
-    const imoveis = await buscarZap(bairro);
+    const imoveis = await buscarZapDireto(bairro);
     const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
-    console.log(`   ✓ ${unicos.length} imoveis via ZAP/ScraperAPI`);
+    console.log(`   ✓ ${unicos.length} imoveis via ZAP direto`);
     return unicos;
   } catch (e) {
-    console.log(`   ⚠_ ZAP: ${e.message?.slice(0, 60)}`);
-    return [];
+    console.log(`   ⚠️  ZAP direto falhou (${e.message?.slice(0, 50)}), tentando proxy...`);
   }
+
+  // 2) ZAP via proxy pago (ScraperAPI/BrightData) — reserva
+  try {
+    const imoveis = await buscarZapViaProxy(bairro);
+    const unicos = [...new Map(imoveis.map(i => [i.link, i])).values()];
+    console.log(`   ✓ ${unicos.length} imoveis via ZAP+Proxy`);
+    return unicos;
+  } catch (e) {
+    console.log(`   ⚠️  Proxy falhou (${e.message?.slice(0, 50)}), tentando Apify...`);
+  }
+
+  // 3) Apify — backup de emergência (caro, usar com moderação)
+  if (process.env.APIFY_TOKEN) {
+    try {
+      const apifyResult = await buscarViaApify(bairro);
+      if (apifyResult && apifyResult.length > 0) {
+        const unicos = [...new Map(apifyResult.map(i => [i.link, i])).values()];
+        console.log(`   ✓ ${unicos.length} imoveis via Apify (backup)`);
+        return unicos;
+      }
+    } catch (e) {
+      console.log(`   __ Apify também falhou: ${e.message?.slice(0, 50)}`);
+    }
+  }
+
+  console.log(`   ❌ Nenhuma fonte funcionou para ${bairro}`);
+  return [];
 }
 
 async function salvarImoveis(imoveis) {
@@ -863,5 +900,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
-cron.schedule('0 * * * *', rodarScraper); // 1x por hora, no minuto 0
+cron.schedule('0 */2 * * *', rodarScraper); // 1x a cada 2h — economiza requisições
 rodarScraper();
