@@ -597,10 +597,14 @@ let userId = null;
 // ── Auth ─────────────────────────────────────────────────────
 async function init() {
   try {
-    const { data: { session } } = await sb.auth.getSession();
+    // Timeout de 8s para evitar loading infinito
+    const sessionResult = await Promise.race([
+      sb.auth.getSession(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]);
+    const session = sessionResult?.data?.session;
     if (!session?.user) {
-      document.getElementById('loading-overlay').style.display = 'none';
-      document.getElementById('auth-wall').style.display = 'block';
+      window.location.href = 'saiuvaga-cadastro.html';
       return;
     }
     userId = session.user.id;
@@ -608,8 +612,7 @@ async function init() {
     await carregarDados(session.user.id);
   } catch (e) {
     console.error(e);
-    document.getElementById('loading-overlay').style.display = 'none';
-    document.getElementById('auth-wall').style.display = 'block';
+    window.location.href = 'saiuvaga-cadastro.html';
   }
 }
 
