@@ -421,8 +421,6 @@ async function entrar() {
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { showError('Preencha e-mail e senha.'); return; }
   setLoading('btn-entrar','spin2',true); hideError();
-  // Limpa sessão residual antes de logar para evitar conflito
-  try { await sb.auth.signOut(); } catch(e) {}
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) {
     setLoading('btn-entrar','spin2',false);
@@ -430,13 +428,25 @@ async function entrar() {
     showError(msgs[error.message] || error.message); return;
   }
   setLoading('btn-entrar','spin2',false);
-  const { data: user } = await sb.from('users').select('ativo, nome').eq('id', data.user.id).maybeSingle();
-  if (user?.ativo) {
-    showSuccess(`Bem-vindo de volta, ${user.nome || ''}! 👋`,'Seus alertas estão ativos. Redirecionando...');
-    setTimeout(() => window.location.href = 'saiuvaga-busca.html', 1500);
-  } else {
-    showSuccess('Login feito! ✓','Ative seu plano para começar a receber alertas de imóveis.');
-    setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1500);
+  // Usa /api/usuario/status (service_key no backend) para evitar bloqueio de RLS
+  const agora = new Date();
+  try {
+    const res = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${data.user.id}`);
+    const status = await res.json();
+    const ativo = status.ativo && status.validade && new Date(status.validade) > agora;
+    if (ativo) {
+      showSuccess(`Bem-vindo de volta! 👋`, 'Redirecionando...');
+      setTimeout(() => window.location.href = 'saiuvaga-busca.html', 1000);
+    } else if (status.trial_usado) {
+      showSuccess('Login feito! ✓', 'Seu trial expirou. Redirecionando para planos...');
+      setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
+    } else {
+      showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas.');
+      setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
+    }
+  } catch(e) {
+    // Fallback: vai para busca e deixa o paywall decidir
+    window.location.href = 'saiuvaga-busca.html';
   }
 }
 
