@@ -421,6 +421,8 @@ async function entrar() {
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { showError('Preencha e-mail e senha.'); return; }
   setLoading('btn-entrar','spin2',true); hideError();
+  // Limpa sessão residual antes de logar para evitar conflito
+  try { await sb.auth.signOut(); } catch(e) {}
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) {
     setLoading('btn-entrar','spin2',false);
