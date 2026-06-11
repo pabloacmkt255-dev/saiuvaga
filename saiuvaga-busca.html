@@ -367,7 +367,7 @@ const POR_PAGINA = 12;
 async function init() {
   try {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session?.user) { showWall('auth'); return; }
+    if (!session?.user) { window.location.href = 'saiuvaga-cadastro.html'; return; }
 
     userId = session.user.id;
 
