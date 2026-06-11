@@ -1175,12 +1175,14 @@ async function buscarOLX(bairro, region) {
     ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
   ];
 
-  // Se todas as fontes grátis falharam, tenta Apify ZAP dedicado (token separado)
+  // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
+  let apifyZapCount = 0;
   if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN)) {
     try {
       const apifyResult = await buscarViaApify(bairro);
       if (apifyResult && apifyResult.length > 0) {
         todos.push(...apifyResult);
+        apifyZapCount = apifyResult.length;
         console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
       }
     } catch (e) {
@@ -1199,8 +1201,10 @@ async function buscarOLX(bairro, region) {
     }
   }
 
-  // Diagnóstico por fonte
-  console.log(`   📊 Fontes brutas: ZAP=${zapDireto.status==='fulfilled'?zapDireto.value?.length||0:'ERR'} VivaReal=${vivaReal.status==='fulfilled'?vivaReal.value?.length||0:'ERR'} OLX=${olxHtml.status==='fulfilled'?olxHtml.value?.length||0:'ERR'} ML=${mercadoLivre.status==='fulfilled'?mercadoLivre.value?.length||0:'ERR'}`);
+  // Diagnóstico por fonte (ZAP inclui Apify se foi usado)
+  const zapCount = zapDireto.status==='fulfilled' ? (zapDireto.value?.length||0) : apifyZapCount;
+  const zapLabel = zapDireto.status==='fulfilled' ? zapCount : (apifyZapCount > 0 ? `Apify:${apifyZapCount}` : 'ERR');
+  console.log(`   📊 Fontes brutas: ZAP=${zapLabel} VivaReal=${vivaReal.status==='fulfilled'?vivaReal.value?.length||0:'ERR'} OLX=${olxHtml.status==='fulfilled'?olxHtml.value?.length||0:'ERR'} ML=${mercadoLivre.status==='fulfilled'?mercadoLivre.value?.length||0:'ERR'}`);
 
   // Deduplica por link
   const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
