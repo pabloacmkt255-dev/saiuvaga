@@ -24,6 +24,62 @@ const ZAPI_TOKEN       = process.env.ZAPI_TOKEN;
 const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN || ZAPI_TOKEN; // Token de segurança do cliente Z-API
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
+// -- Robustez: pool de User-Agents (reduz padrão de detecção) ----
+const UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+];
+function getRandomUA() {
+  return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
+}
+
+// -- Robustez: jitter (delay aleatório) para evitar bursts ------
+function jitter(minMs = 800, maxMs = 4000) {
+  const ms = Math.floor(Math.random() * (maxMs - minMs)) + minMs;
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// -- Robustez: circuit breaker por fonte -------------------------
+// Após N falhas seguidas, "desliga" a fonte por algumas horas para
+// não desperdiçar cota de proxy/Apify nem chamar repetidamente algo
+// que está banido.
+const CIRCUIT_THRESHOLD   = 3;                  // falhas seguidas até abrir o circuito
+const CIRCUIT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h de cooldown
+const circuitState = {};
+
+function circuitAllows(source) {
+  const s = circuitState[source];
+  if (!s || !s.cooldownUntil) return true;
+  if (Date.now() >= s.cooldownUntil) {
+    s.cooldownUntil = 0;
+    s.failCount = 0;
+    return true;
+  }
+  return false;
+}
+function circuitFail(source) {
+  const s = circuitState[source] || (circuitState[source] = { failCount: 0, cooldownUntil: 0 });
+  s.failCount++;
+  if (s.failCount >= CIRCUIT_THRESHOLD) {
+    s.cooldownUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+    console.log(`   ⛔ Circuit breaker: ${source} em cooldown por 2h (${s.failCount} falhas seguidas)`);
+  }
+}
+function circuitSuccess(source) {
+  const s = circuitState[source];
+  if (s) { s.failCount = 0; s.cooldownUntil = 0; }
+}
+
+// -- Robustez: estado global do scraper (para healthcheck) -------
+const scraperHealth = {
+  lastRunAt: null,
+  lastRunTotal: null,
+  consecutiveEmptyCycles: 0,
+};
+
 async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   const mensagem = mensagemLivre || (
     `🚨 *Nova vaga - ${imovel.bairro}!*\n\n` +
@@ -651,6 +707,32 @@ function verificarAdmin(req, res) {
   return true;
 }
 
+app.get('/api/admin/health', (req, res) => {
+  if (!verificarAdmin(req, res)) return;
+  const envCheck = (name) => Boolean(process.env[name]);
+  res.json({
+    env: {
+      SUPABASE_URL: envCheck('SUPABASE_URL'),
+      SUPABASE_SERVICE_KEY: envCheck('SUPABASE_SERVICE_KEY'),
+      MP_ACCESS_TOKEN: envCheck('MP_ACCESS_TOKEN'),
+      GROQ_API_KEY: envCheck('GROQ_API_KEY'),
+      ZAPI_INSTANCE: envCheck('ZAPI_INSTANCE'),
+      ZAPI_TOKEN: envCheck('ZAPI_TOKEN'),
+      APIFY_TOKEN_VIVAREAL: envCheck('APIFY_TOKEN_VIVAREAL'),
+      APIFY_TOKEN_OLX: envCheck('APIFY_TOKEN_OLX'),
+      APIFY_TOKEN_ZAP: envCheck('APIFY_TOKEN_ZAP'),
+      APIFY_TOKEN_POOL: envCheck('APIFY_TOKEN_POOL'),
+      RESIDENTIAL_PROXY_URL: envCheck('RESIDENTIAL_PROXY_URL'),
+      SCRAPERAPI_KEY: envCheck('SCRAPERAPI_KEY'),
+      SCRAPEDO_KEY: envCheck('SCRAPEDO_KEY'),
+      BRIGHTDATA_KEY: envCheck('BRIGHTDATA_KEY'),
+      ADMIN_WHATSAPP: envCheck('ADMIN_WHATSAPP'),
+    },
+    scraper: scraperHealth,
+    circuitBreaker: circuitState,
+  });
+});
+
 app.get('/api/admin/users', async (req, res) => {
   if (!verificarAdmin(req, res)) return;
   try {
@@ -901,7 +983,7 @@ async function buscarVivaRealScraperAPI(bairro) {
   const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
   try {
     const { data: html } = await axios.get(proxyUrl, {
-      headers: { 'Accept': 'text/html', 'Accept-Language': 'pt-BR,pt;q=0.9' },
+      headers: { 'User-Agent': getRandomUA(), 'Accept': 'text/html', 'Accept-Language': 'pt-BR,pt;q=0.9' },
       timeout: 60000,
     });
     const $ = cheerio.load(html);
@@ -1021,7 +1103,7 @@ async function buscarOLXScraperAPI(bairro) {
   const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
   try {
     const { data: html } = await axios.get(proxyUrl, {
-      headers: { 'Accept': 'text/html' },
+      headers: { 'User-Agent': getRandomUA(), 'Accept': 'text/html' },
       timeout: 60000,
     });
     const $ = cheerio.load(html);
@@ -1169,7 +1251,7 @@ async function buscarZapViaProxy(bairro) {
   // Tenta VivaReal via proxy
   try {
     const headersVR = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'User-Agent': getRandomUA(),
       'Accept': 'application/json',
       'x-domain': 'www.vivareal.com.br',
       'Origin': 'https://www.vivareal.com.br',
@@ -1194,7 +1276,7 @@ async function buscarZapViaProxy(bairro) {
 
   // Tenta ZAP via proxy
   const headersZAP = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'User-Agent': getRandomUA(),
     'Accept': 'application/json',
     'x-domain': 'www.zapimoveis.com.br',
     'Origin': 'https://www.zapimoveis.com.br',
@@ -1218,13 +1300,29 @@ async function buscarZapViaProxy(bairro) {
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // Roda todas as fontes grátis em paralelo para máxima cobertura
+  // Roda todas as fontes grátis, com pequeno jitter individual para
+  // evitar burst simultâneo de requests (padrão detectável por anti-bot).
+  // Fontes em cooldown (circuit breaker) são puladas e tratadas como vazias.
+  const runSource = async (name, fn) => {
+    if (!circuitAllows(name)) {
+      console.log(`   ⛔ ${name} em cooldown (circuit breaker), pulando...`);
+      return [];
+    }
+    await jitter();
+    return fn(bairro);
+  };
+
   const [zapDireto, vivaReal, mercadoLivre, olxHtml] = await Promise.allSettled([
-    buscarZapDireto(bairro),
-    buscarVivaRealDireto(bairro),
-    buscarMercadoLivre(bairro),
-    buscarOLXHtml(bairro),
+    runSource('zapDireto', buscarZapDireto),
+    runSource('vivaReal', buscarVivaRealDireto),
+    runSource('mercadoLivre', buscarMercadoLivre),
+    runSource('olxHtml', buscarOLXHtml),
   ]);
+
+  // Atualiza circuit breaker: rejeição = falha real; sucesso (mesmo vazio) = ok
+  if (zapDireto.status === 'fulfilled') circuitSuccess('zapDireto'); else circuitFail('zapDireto');
+  if (vivaReal.status === 'fulfilled') circuitSuccess('vivaReal'); else circuitFail('vivaReal');
+  if (olxHtml.status === 'fulfilled') circuitSuccess('olxHtml'); else circuitFail('olxHtml');
 
   const todos = [
     ...(zapDireto.status === 'fulfilled' ? zapDireto.value : []),
@@ -1235,29 +1333,41 @@ async function buscarOLX(bairro, region) {
 
   // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
   let apifyZapCount = 0;
-  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
+  if (todos.length === 0 && circuitAllows('apifyZap')
+      && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
     try {
+      await jitter();
       const apifyResult = await buscarViaApify(bairro);
-      if (apifyResult && apifyResult.length > 0) {
-        todos.push(...apifyResult);
-        apifyZapCount = apifyResult.length;
-        console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
+      if (apifyResult === null) {
+        circuitFail('apifyZap');
+      } else {
+        circuitSuccess('apifyZap');
+        if (apifyResult.length > 0) {
+          todos.push(...apifyResult);
+          apifyZapCount = apifyResult.length;
+          console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
+        }
       }
     } catch (e) {
+      circuitFail('apifyZap');
       console.log(`   __ Apify ZAP falhou: ${e.message?.slice(0, 50)}`);
     }
   }
 
   // Proxy como último recurso (raramente necessário)
-  if (todos.length === 0) {
+  if (todos.length === 0 && circuitAllows('proxyFinal')) {
     console.log(`   ⚠️  Tentando proxy como último recurso...`);
     try {
+      await jitter();
       const imoveis = await buscarZapViaProxy(bairro);
+      circuitSuccess('proxyFinal');
       todos.push(...imoveis);
     } catch (e) {
+      circuitFail('proxyFinal');
       console.log(`   __ Proxy falhou: ${e.message?.slice(0, 50)}`);
     }
   }
+
 
   // Diagnóstico por fonte (ZAP inclui Apify se foi usado)
   const zapCount = zapDireto.status==='fulfilled' ? (zapDireto.value?.length||0) : apifyZapCount;
@@ -1395,12 +1505,38 @@ async function rodarScraper() {
     console.log(`   📋 Sem alertas — usando bairros padrão`);
   }
 
+  let totalEncontrados = 0;
   for (const b of bairrosParaBuscar) {
     const imoveis = await buscarOLX(b.bairro, b.region);
+    totalEncontrados += imoveis.length;
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
   }
   await verificarAlertas();
+
+  // -- Robustez: alerta automático em caso de ciclos vazios seguidos --
+  scraperHealth.lastRunAt = new Date().toISOString();
+  scraperHealth.lastRunTotal = totalEncontrados;
+  if (totalEncontrados === 0) {
+    scraperHealth.consecutiveEmptyCycles++;
+  } else {
+    scraperHealth.consecutiveEmptyCycles = 0;
+  }
+
+  const EMPTY_CYCLES_ALERT_THRESHOLD = 2; // ~8h sem nenhum imóvel encontrado
+  if (scraperHealth.consecutiveEmptyCycles === EMPTY_CYCLES_ALERT_THRESHOLD && process.env.ADMIN_WHATSAPP) {
+    try {
+      await enviarWhatsApp(
+        process.env.ADMIN_WHATSAPP,
+        null,
+        `⚠️ SaiuVaga: ${EMPTY_CYCLES_ALERT_THRESHOLD} ciclos seguidos sem encontrar nenhum imóvel (0 resultados em todas as fontes). Verifique os logs do Railway.`
+      );
+      console.log('   🔔 Alerta de falha enviado ao admin via WhatsApp.');
+    } catch (e) {
+      console.log(`   __ Falha ao enviar alerta admin: ${e.message?.slice(0, 50)}`);
+    }
+  }
+
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
