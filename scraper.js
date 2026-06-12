@@ -765,9 +765,23 @@ async function buscarViaApify(bairro) {
 }
 
 async function axiosProxy(url, headers = {}, timeout = 45000) {
+  const residentialProxyUrl = process.env.RESIDENTIAL_PROXY_URL;
   const scraperApiKey = process.env.SCRAPERAPI_KEY;
   const scrapeDoKey   = process.env.SCRAPEDO_KEY;
   const brightDataKey = process.env.BRIGHTDATA_KEY;
+
+  // 0) Proxy residencial (mais resistente a bans de IP de datacenter)
+  if (residentialProxyUrl) {
+    try {
+      const { HttpProxyAgent } = require('http-proxy-agent');
+      const proxyAgent = new HttpProxyAgent(residentialProxyUrl);
+      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
+      if (res.status >= 400) throw new Error(`status ${res.status}`);
+      return res;
+    } catch (e) {
+      console.log(`   __ Proxy residencial falhou (${e.message?.slice(0,50)}), tentando ScraperAPI...`);
+    }
+  }
 
   if (scraperApiKey) {
     try {
