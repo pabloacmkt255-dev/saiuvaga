@@ -685,10 +685,47 @@ app.get('/api/admin/payments', async (req, res) => {
 // SCRAPER - Apify (principal) + ScraperAPI (fallback)
 // -------------------------------------------------------------
 
+// ─── Pool de tokens Apify (cascata entre contas, evita limite mensal) ────────
+function getApifyTokenPool() {
+  const candidates = [
+    process.env.APIFY_TOKEN_VIVAREAL,
+    process.env.APIFY_TOKEN_OLX,
+    process.env.APIFY_TOKEN_ZAP,
+    process.env.APIFY_TOKEN,
+    ...((process.env.APIFY_TOKEN_POOL || '').split(',').map(t => t.trim())),
+  ];
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+// Tenta rodar o actor cheerio-scraper, alternando entre todos os tokens
+// disponíveis (cascata) se um deles estiver sem crédito/banido.
+async function runApifyCheerio(input, primaryToken) {
+  const tokens = [primaryToken, ...getApifyTokenPool()].filter(Boolean);
+  const uniqueTokens = [...new Set(tokens)];
+  if (uniqueTokens.length === 0) throw new Error('Nenhum APIFY_TOKEN configurado');
+
+  let lastError;
+  for (const token of uniqueTokens) {
+    try {
+      const runRes = await axios.post(
+        `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
+        input,
+        { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
+      );
+      return runRes.data || [];
+    } catch (e) {
+      lastError = e;
+      const msg = e.response?.data?.error?.type || e.message || '';
+      console.log(`   __ Apify token ...${token.slice(-6)} falhou: ${String(msg).slice(0,50)}`);
+    }
+  }
+  throw lastError || new Error('Todos os tokens Apify falharam');
+}
+
 // Busca imoveis via Apify actor fatihtahta/zap-imoveis-scraper
 async function buscarViaApify(bairro) {
   const token = process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN;
-  if (!token) return null;
+  if (!token && getApifyTokenPool().length === 0) return null;
 
   const slug = toSlug(bairro);
   // Usa cheerio-scraper (muito mais barato que zap-imoveis-scraper)
@@ -725,13 +762,7 @@ async function buscarViaApify(bairro) {
   };
 
   try {
-    const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
-      input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-    );
-
-    const items = runRes.data || [];
+    const items = await runApifyCheerio(input, token);
     if (!Array.isArray(items) || items.length === 0) return [];
 
     // cheerio-scraper retorna items diretos já mapeados
@@ -822,11 +853,8 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 // ─── VIVA REAL via Apify dedicado + ScraperAPI dedicado ──────────────────────
 // ─── VIVA REAL via Apify (token principal) + ScraperAPI (fallback) ───────────
 async function buscarVivaRealApify(bairro) {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return [];
-  const slug = toSlug(bairro);
-  // Actor genérico do Apify que faz scraping com Cheerio
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+  const token = process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN;
+  if (!token && getApifyTokenPool().length === 0) return [];
   const input = {
     startUrls: [{ url: targetUrl }],
     maxCrawlingDepth: 0,
@@ -854,12 +882,7 @@ async function buscarVivaRealApify(bairro) {
     }`,
   };
   try {
-    const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
-      input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-    );
-    const items = runRes.data || [];
+    const items = await runApifyCheerio(input, token);
     if (!Array.isArray(items) || items.length === 0) return [];
     return items
       .filter(i => i.preco > 0 && i.link?.length > 20)
@@ -933,7 +956,7 @@ async function buscarVivaRealScraperAPI(bairro) {
 
 async function buscarVivaRealDireto(bairro) {
   // 1) Apify (token principal)
-  if (process.env.APIFY_TOKEN) {
+  if (process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
     const result = await buscarVivaRealApify(bairro);
     if (result.length > 0) return result;
   }
@@ -950,8 +973,8 @@ async function buscarMercadoLivre(bairro) { return []; }
 
 // ─── OLX via Apify (token principal) + ScraperAPI (fallback) ─────────────────
 async function buscarOLXApify(bairro) {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return [];
+  const token = process.env.APIFY_TOKEN_OLX || process.env.APIFY_TOKEN;
+  if (!token && getApifyTokenPool().length === 0) return [];
   const slug = toSlug(bairro);
   const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
   const input = {
@@ -979,12 +1002,7 @@ async function buscarOLXApify(bairro) {
     }`,
   };
   try {
-    const runRes = await axios.post(
-      `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
-      input,
-      { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
-    );
-    const items = runRes.data || [];
+    const items = await runApifyCheerio(input, token);
     if (!Array.isArray(items) || items.length === 0) return [];
     return items
       .filter(i => i.preco > 0 && i.link?.length > 20)
@@ -1035,7 +1053,7 @@ async function buscarOLXScraperAPI(bairro) {
 
 // Orquestra OLX: Apify primeiro, ScraperAPI como fallback
 async function buscarOLXHtml(bairro) {
-  if (process.env.APIFY_TOKEN) {
+  if (process.env.APIFY_TOKEN_OLX || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
     const result = await buscarOLXApify(bairro);
     if (result.length > 0) return result;
   }
@@ -1217,7 +1235,7 @@ async function buscarOLX(bairro, region) {
 
   // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
   let apifyZapCount = 0;
-  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN)) {
+  if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
     try {
       const apifyResult = await buscarViaApify(bairro);
       if (apifyResult && apifyResult.length > 0) {
