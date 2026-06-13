@@ -1201,15 +1201,14 @@ async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
 }
 
 async function buscarZapPuppeteer(bairro) {
-  const browser = await getScrapingBrowser();
-  if (!browser) return [];
-
   const slug = toSlug(bairro);
   const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste+${slug}` : slug;
   const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiao}/`;
 
-  let page;
+  let browser, page;
   try {
+    browser = await getScrapingBrowser();
+    if (!browser) return [];
     page = await browser.newPage();
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
     await new Promise(r => setTimeout(r, 5000));
@@ -1223,20 +1222,19 @@ async function buscarZapPuppeteer(bairro) {
     return [];
   } finally {
     try { await page?.close(); } catch {}
-    try { await browser.close(); } catch {}
+    try { await browser?.close(); } catch {}
   }
 }
 
 async function buscarVivaRealPuppeteer(bairro) {
-  const browser = await getScrapingBrowser();
-  if (!browser) return [];
-
   const slug = toSlug(bairro);
   const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste/${slug}` : slug;
   const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiao}/`;
 
-  let page;
+  let browser, page;
   try {
+    browser = await getScrapingBrowser();
+    if (!browser) return [];
     page = await browser.newPage();
     await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
     await new Promise(r => setTimeout(r, 5000));
@@ -1250,7 +1248,7 @@ async function buscarVivaRealPuppeteer(bairro) {
     return [];
   } finally {
     try { await page?.close(); } catch {}
-    try { await browser.close(); } catch {}
+    try { await browser?.close(); } catch {}
   }
 }
 
