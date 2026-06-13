@@ -940,6 +940,8 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 async function buscarVivaRealApify(bairro) {
   const token = process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN;
   if (!token && getApifyTokenPool().length === 0) return [];
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
   const input = {
     startUrls: [{ url: targetUrl }],
     maxCrawlingDepth: 0,
