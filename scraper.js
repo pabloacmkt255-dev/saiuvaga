@@ -781,8 +781,6 @@ function getApifyTokenPool() {
 
 // Tenta rodar o actor cheerio-scraper, alternando entre todos os tokens
 // disponíveis (cascata) se um deles estiver sem crédito/banido.
-// Usa run assíncrono + polling em vez de run-sync, que exige aprovação extra
-// para actors "full permissions" em contas novas.
 async function runApifyCheerio(input, primaryToken) {
   const tokens = [primaryToken, ...getApifyTokenPool()].filter(Boolean);
   const uniqueTokens = [...new Set(tokens)];
@@ -791,41 +789,16 @@ async function runApifyCheerio(input, primaryToken) {
   let lastError;
   for (const token of uniqueTokens) {
     try {
-      // 1) Dispara o run (assíncrono — sem restrição de full-permissions)
       const runRes = await axios.post(
-        `https://api.apify.com/v2/acts/apify~cheerio-scraper/runs?token=${token}&memory=128`,
+        `https://api.apify.com/v2/acts/apify~cheerio-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=128`,
         input,
-        { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+        { headers: { 'Content-Type': 'application/json' }, timeout: 100000 }
       );
-      const runId = runRes.data?.data?.id;
-      if (!runId) throw new Error('Run ID não retornado pela Apify');
-
-      // 2) Polling até o run terminar (max ~90s, checando a cada 5s)
-      let succeeded = false;
-      for (let i = 0; i < 18; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const statusRes = await axios.get(
-          `https://api.apify.com/v2/actor-runs/${runId}?token=${token}`,
-          { timeout: 10000 }
-        );
-        const state = statusRes.data?.data?.status;
-        if (state === 'SUCCEEDED') { succeeded = true; break; }
-        if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(state)) {
-          throw new Error(`Run Apify terminou com status: ${state}`);
-        }
-      }
-      if (!succeeded) throw new Error('Run Apify não completou em 90s (timeout de polling)');
-
-      // 3) Busca os itens do dataset do run
-      const itemsRes = await axios.get(
-        `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${token}`,
-        { timeout: 15000 }
-      );
-      return itemsRes.data || [];
+      return runRes.data || [];
     } catch (e) {
       lastError = e;
-      const msg = e.response?.data?.error?.type || e.response?.data?.error?.message || e.message || '';
-      console.log(`   __ Apify token ...${token.slice(-6)} falhou: ${String(msg).slice(0,60)}`);
+      const msg = e.response?.data?.error?.type || e.message || '';
+      console.log(`   __ Apify token ...${token.slice(-6)} falhou: ${String(msg).slice(0,50)}`);
     }
   }
   throw lastError || new Error('Todos os tokens Apify falharam');
@@ -913,9 +886,9 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   // 0) Proxy residencial (mais resistente a bans de IP de datacenter)
   if (residentialProxyUrl) {
     try {
-      const { HttpProxyAgent } = require('http-proxy-agent');
-      const proxyAgent = new HttpProxyAgent(residentialProxyUrl);
-      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      const proxyAgent = new HttpsProxyAgent(residentialProxyUrl);
+      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent, proxy: false });
       if (res.status >= 400) throw new Error(`status ${res.status}`);
       return res;
     } catch (e) {
@@ -947,12 +920,12 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 
   if (brightDataKey) {
     try {
-      const { HttpProxyAgent } = require('http-proxy-agent');
-      const proxyAgent = new HttpProxyAgent(`http://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:22225`);
-      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent });
+      const { HttpsProxyAgent } = require('https-proxy-agent');
+      const proxyAgent = new HttpsProxyAgent(`http://brd-customer-hl_auto:${brightDataKey}@brd.superproxy.io:22225`);
+      const res = await axios.get(url, { headers, timeout, httpAgent: proxyAgent, httpsAgent: proxyAgent, proxy: false });
       return res;
     } catch (e) {
-      console.log(`   __ BrightData falhou (${e.message.slice(0,40)}), tentando direto...`);
+      console.log(`   __ BrightData falhou (${e.message?.slice(0,40)}), tentando direto...`);
     }
   }
 
@@ -964,8 +937,6 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
 async function buscarVivaRealApify(bairro) {
   const token = process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN;
   if (!token && getApifyTokenPool().length === 0) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
   const input = {
     startUrls: [{ url: targetUrl }],
     maxCrawlingDepth: 0,
