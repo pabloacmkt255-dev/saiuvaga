@@ -1106,7 +1106,7 @@ async function buscarOLXScraperAPI(bairro) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
   const slug = toSlug(bairro);
-  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
   const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=br`;
   try {
     const { data: html } = await axios.get(proxyUrl, {
@@ -1350,7 +1350,7 @@ async function buscarOLXWebUnlocker(bairro) {
   if (!apiKey) return [];
 
   const slug = toSlug(bairro);
-  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
 
   try {
     const { data: html } = await axios.post(
