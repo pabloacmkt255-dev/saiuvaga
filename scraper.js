@@ -1047,12 +1047,9 @@ async function buscarVivaRealDireto(bairro) {
     const result = await buscarVivaRealPuppeteer(bairro);
     if (result.length > 0) return result;
   }
-  // 2) Apify (token principal)
-  if (process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
-    const result = await buscarVivaRealApify(bairro);
-    if (result.length > 0) return result;
-  }
-  // 3) ScraperAPI (token principal)
+  // 2) ScraperAPI (fallback rápido — Apify removido: bloqueado em todas
+  // as contas (full-permission-actor-not-approved), e a cascata de tokens
+  // levava 6-7min de timeout, travando o ciclo)
   if (process.env.SCRAPERAPI_KEY) {
     const result = await buscarVivaRealScraperAPI(bairro);
     if (result.length > 0) return result;
@@ -1342,10 +1339,7 @@ async function buscarOLXHtml(bairro) {
     const result = await buscarOLXWebUnlocker(bairro);
     if (result.length > 0) return result;
   }
-  if (process.env.APIFY_TOKEN_OLX || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
-    const result = await buscarOLXApify(bairro);
-    if (result.length > 0) return result;
-  }
+  // Apify removido: bloqueado em todas as contas (cascata travava ~6-7min)
   if (process.env.SCRAPERAPI_KEY) {
     return buscarOLXScraperAPI(bairro);
   }
