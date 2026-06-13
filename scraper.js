@@ -1040,19 +1040,19 @@ async function buscarVivaRealScraperAPI(bairro) {
 }
 
 async function buscarVivaRealDireto(bairro) {
-  // 1) Apify (token principal)
+  // 1) Puppeteer via Scraping Browser (confirmado funcional, passa Cloudflare)
+  if (process.env.BRIGHTDATA_BROWSER_WS) {
+    const result = await buscarVivaRealPuppeteer(bairro);
+    if (result.length > 0) return result;
+  }
+  // 2) Apify (token principal)
   if (process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
     const result = await buscarVivaRealApify(bairro);
     if (result.length > 0) return result;
   }
-  // 2) ScraperAPI (token principal)
+  // 3) ScraperAPI (token principal)
   if (process.env.SCRAPERAPI_KEY) {
     const result = await buscarVivaRealScraperAPI(bairro);
-    if (result.length > 0) return result;
-  }
-  // 3) Web Unlocker (glue-api JSON + fallback HTML renderizado)
-  if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
-    const result = await buscarVivaRealPuppeteer(bairro);
     if (result.length > 0) return result;
   }
   return [];
@@ -1152,10 +1152,27 @@ async function buscarOLXScraperAPI(bairro) {
 //   ZAP:      https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+zona-oeste+{slug}/
 //   VivaReal: https://www.vivareal.com.br/aluguel/sp/sao-paulo/zona-oeste/{slug}/
 
-const ZONA_OESTE_BAIRROS = new Set([
-  'pinheiros', 'vila-madalena', 'itaim-bibi', 'perdizes', 'moema',
-  'alto-de-pinheiros', 'jardins', 'jardim-paulista', 'butanta',
-  'vila-leopoldina', 'lapa', 'sumare', 'sumarezinho', 'jardim-america',
+// Mapa bairro → região (slug usado nas URLs do ZAP/VivaReal). Bairros não
+// listados são usados sem prefixo de região (alguns portais aceitam direto).
+const BAIRRO_REGIAO = new Map([
+  ['pinheiros', 'zona-oeste'],
+  ['vila-madalena', 'zona-oeste'],
+  ['perdizes', 'zona-oeste'],
+  ['alto-de-pinheiros', 'zona-oeste'],
+  ['butanta', 'zona-oeste'],
+  ['vila-leopoldina', 'zona-oeste'],
+  ['lapa', 'zona-oeste'],
+  ['sumare', 'zona-oeste'],
+  ['sumarezinho', 'zona-oeste'],
+  ['jardins', 'zona-oeste'],
+  ['jardim-paulista', 'zona-oeste'],
+  // Zona Sul
+  ['itaim-bibi', 'zona-sul'],
+  ['moema', 'zona-sul'],
+  ['jardim-america', 'zona-sul'],
+  ['vila-mariana', 'zona-sul'],
+  ['campo-belo', 'zona-sul'],
+  ['brooklin', 'zona-sul'],
 ]);
 
 async function getScrapingBrowser() {
@@ -1202,7 +1219,8 @@ async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
 
 async function buscarZapPuppeteer(bairro) {
   const slug = toSlug(bairro);
-  const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste+${slug}` : slug;
+  const regiaoPrefix = BAIRRO_REGIAO.get(slug);
+  const regiao = regiaoPrefix ? `${regiaoPrefix}+${slug}` : slug;
   const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiao}/`;
 
   let browser, page;
@@ -1228,7 +1246,8 @@ async function buscarZapPuppeteer(bairro) {
 
 async function buscarVivaRealPuppeteer(bairro) {
   const slug = toSlug(bairro);
-  const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste/${slug}` : slug;
+  const regiaoPrefix = BAIRRO_REGIAO.get(slug);
+  const regiao = regiaoPrefix ? `${regiaoPrefix}/${slug}` : slug;
   const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiao}/`;
 
   let browser, page;
