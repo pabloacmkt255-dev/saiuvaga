@@ -1073,7 +1073,6 @@ const BAIRRO_REGIAO = new Map([
   ['perdizes', 'zona-oeste'],
   ['alto-de-pinheiros', 'zona-oeste'],
   ['butanta', 'zona-oeste'],
-  ['butanta', 'zona-oeste'],
   ['vila-leopoldina', 'zona-oeste'],
   ['lapa', 'zona-oeste'],
   ['sumare', 'zona-oeste'],
@@ -1093,7 +1092,6 @@ const BAIRRO_REGIAO = new Map([
   ['saude', 'zona-sul'],
   ['paraiso', 'zona-sul'],
   ['aclimacao', 'zona-sul'],
-  ['santa-cecilia', 'zona-sul'],
   ['morumbi', 'zona-sul'],
   // Centro
   ['liberdade', 'centro'],
@@ -1102,12 +1100,14 @@ const BAIRRO_REGIAO = new Map([
   ['republica', 'centro'],
   ['bom-retiro', 'centro'],
   ['higienopolis', 'centro'],
+  ['santa-cecilia', 'centro'],
   // Zona Norte
   ['santana', 'zona-norte'],
   // Zona Leste
   ['tatuape', 'zona-leste'],
   ['vila-prudente', 'zona-leste'],
-  // Santo André (Grande ABC — sem região no ZAP/VivaReal)
+  // Santo André — cidade do ABC, não tem região dentro do ZAP SP
+  // (sem prefixo de região, scraper vai usar só o slug)
 ]);
 
 async function getScrapingBrowser() {
@@ -1285,16 +1285,37 @@ async function buscarOLXHtml(bairro) {
 // Bairros fixos — apenas quando não há alertas configurados para o bairro
 // O scraper prioriza bairros com alertas ativos (ver rodarScraper)
 const BUSCAS = [
-  { bairro: 'Pinheiros',      region: 'pinheiros'      },
-  { bairro: 'Vila Madalena',  region: 'vila-madalena'  },
-  { bairro: 'Moema',          region: 'moema'          },
-  { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
-  { bairro: 'Perdizes',       region: 'perdizes'        },
-  { bairro: 'Brooklin',       region: 'brooklin'        },
-  { bairro: 'Vila Mariana',   region: 'vila-mariana'   },
-  { bairro: 'Jardins',        region: 'jardins'         },
-  { bairro: 'Bela Vista',     region: 'bela-vista'     },
-  { bairro: 'Liberdade',      region: 'liberdade'       },
+  { bairro: 'Pinheiros',       region: 'pinheiros'       },
+  { bairro: 'Vila Madalena',   region: 'vila-madalena'   },
+  { bairro: 'Moema',           region: 'moema'           },
+  { bairro: 'Itaim Bibi',      region: 'itaim-bibi'      },
+  { bairro: 'Jardim Paulista',  region: 'jardim-paulista' },
+  { bairro: 'Brooklin',        region: 'brooklin'        },
+  { bairro: 'Perdizes',        region: 'perdizes'        },
+  { bairro: 'Santa Cecília',   region: 'santa-cecilia'   },
+  { bairro: 'Bela Vista',      region: 'bela-vista'      },
+  { bairro: 'Liberdade',       region: 'liberdade'       },
+  { bairro: 'Vila Mariana',    region: 'vila-mariana'    },
+  { bairro: 'Saúde',           region: 'saude'           },
+  { bairro: 'Campo Belo',      region: 'campo-belo'      },
+  { bairro: 'Lapa',            region: 'lapa'            },
+  { bairro: 'Bom Retiro',      region: 'bom-retiro'      },
+  { bairro: 'Consolação',      region: 'consolacao'      },
+  { bairro: 'República',       region: 'republica'       },
+  { bairro: 'Higienópolis',    region: 'higienopolis'    },
+  { bairro: 'Paraíso',         region: 'paraiso'         },
+  { bairro: 'Aclimação',       region: 'aclimacao'       },
+  { bairro: 'Sumaré',          region: 'sumare'          },
+  { bairro: 'Vila Pompeia',    region: 'vila-pompeia'    },
+  { bairro: 'Faria Lima',      region: 'faria-lima'      },
+  { bairro: 'Jardins',         region: 'jardins'         },
+  { bairro: 'Vila Olímpia',    region: 'vila-olimpia'    },
+  { bairro: 'Tatuapé',         region: 'tatuape'         },
+  { bairro: 'Santana',         region: 'santana'         },
+  { bairro: 'Butantã',         region: 'butanta'         },
+  { bairro: 'Morumbi',         region: 'morumbi'         },
+  { bairro: 'Santo André',     region: 'santo-andre'     },
+  { bairro: 'Vila Prudente',   region: 'vila-prudente'   },
 ];
 
 function toSlug(str) {
