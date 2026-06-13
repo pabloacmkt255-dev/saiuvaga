@@ -1067,10 +1067,12 @@ async function buscarOLXScraperAPI(bairro) {
 // Mapa bairro → região (slug usado nas URLs do ZAP/VivaReal). Bairros não
 // listados são usados sem prefixo de região (alguns portais aceitam direto).
 const BAIRRO_REGIAO = new Map([
+  // Zona Oeste
   ['pinheiros', 'zona-oeste'],
   ['vila-madalena', 'zona-oeste'],
   ['perdizes', 'zona-oeste'],
   ['alto-de-pinheiros', 'zona-oeste'],
+  ['butanta', 'zona-oeste'],
   ['butanta', 'zona-oeste'],
   ['vila-leopoldina', 'zona-oeste'],
   ['lapa', 'zona-oeste'],
@@ -1078,6 +1080,9 @@ const BAIRRO_REGIAO = new Map([
   ['sumarezinho', 'zona-oeste'],
   ['jardins', 'zona-oeste'],
   ['jardim-paulista', 'zona-oeste'],
+  ['vila-pompeia', 'zona-oeste'],
+  ['vila-olimpia', 'zona-oeste'],
+  ['faria-lima', 'zona-oeste'],
   // Zona Sul
   ['itaim-bibi', 'zona-sul'],
   ['moema', 'zona-sul'],
@@ -1085,6 +1090,24 @@ const BAIRRO_REGIAO = new Map([
   ['vila-mariana', 'zona-sul'],
   ['campo-belo', 'zona-sul'],
   ['brooklin', 'zona-sul'],
+  ['saude', 'zona-sul'],
+  ['paraiso', 'zona-sul'],
+  ['aclimacao', 'zona-sul'],
+  ['santa-cecilia', 'zona-sul'],
+  ['morumbi', 'zona-sul'],
+  // Centro
+  ['liberdade', 'centro'],
+  ['bela-vista', 'centro'],
+  ['consolacao', 'centro'],
+  ['republica', 'centro'],
+  ['bom-retiro', 'centro'],
+  ['higienopolis', 'centro'],
+  // Zona Norte
+  ['santana', 'zona-norte'],
+  // Zona Leste
+  ['tatuape', 'zona-leste'],
+  ['vila-prudente', 'zona-leste'],
+  // Santo André (Grande ABC — sem região no ZAP/VivaReal)
 ]);
 
 async function getScrapingBrowser() {
@@ -1266,7 +1289,12 @@ const BUSCAS = [
   { bairro: 'Vila Madalena',  region: 'vila-madalena'  },
   { bairro: 'Moema',          region: 'moema'          },
   { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
-  { bairro: 'Perdizes',       region: 'perdizes'       },
+  { bairro: 'Perdizes',       region: 'perdizes'        },
+  { bairro: 'Brooklin',       region: 'brooklin'        },
+  { bairro: 'Vila Mariana',   region: 'vila-mariana'   },
+  { bairro: 'Jardins',        region: 'jardins'         },
+  { bairro: 'Bela Vista',     region: 'bela-vista'     },
+  { bairro: 'Liberdade',      region: 'liberdade'       },
 ];
 
 function toSlug(str) {
