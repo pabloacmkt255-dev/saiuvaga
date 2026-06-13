@@ -935,51 +935,6 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
-// ─── VIVA REAL via Apify dedicado + ScraperAPI dedicado ──────────────────────
-// ─── VIVA REAL via Apify (token principal) + ScraperAPI (fallback) ───────────
-async function buscarVivaRealApify(bairro) {
-  const token = process.env.APIFY_TOKEN_VIVAREAL || process.env.APIFY_TOKEN;
-  if (!token && getApifyTokenPool().length === 0) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
-  const input = {
-    startUrls: [{ url: targetUrl }],
-    maxCrawlingDepth: 0,
-    maxResultsPerCrawl: 24,
-    pageFunction: `async function pageFunction(context) {
-      const { $ } = context;
-      const items = [];
-      const nextDataEl = $('script#__NEXT_DATA__');
-      if (nextDataEl.length) {
-        try {
-          const parsed = JSON.parse(nextDataEl.html());
-          const listings =
-            parsed?.props?.pageProps?.initialState?.results?.listings ||
-            parsed?.props?.pageProps?.results?.listings || [];
-          listings.forEach(l => {
-            const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-            const href = l?.link?.href || '';
-            const link = href ? 'https://www.vivareal.com.br' + href : '';
-            const titulo = l?.listing?.title || 'Imovel VivaReal';
-            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
-          });
-        } catch(e) {}
-      }
-      return items;
-    }`,
-  };
-  try {
-    const items = await runApifyCheerio(input, token);
-    if (!Array.isArray(items) || items.length === 0) return [];
-    return items
-      .filter(i => i.preco > 0 && i.link?.length > 20)
-      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'VivaReal' }));
-  } catch (e) {
-    console.log(`   ⚠️  VivaReal Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  }
-}
-
 async function buscarVivaRealScraperAPI(bairro) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
@@ -1059,48 +1014,6 @@ async function buscarVivaRealDireto(bairro) {
 
 // ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
 async function buscarMercadoLivre(bairro) { return []; }
-
-// ─── OLX via Apify (token principal) + ScraperAPI (fallback) ─────────────────
-async function buscarOLXApify(bairro) {
-  const token = process.env.APIFY_TOKEN_OLX || process.env.APIFY_TOKEN;
-  if (!token && getApifyTokenPool().length === 0) return [];
-  const slug = toSlug(bairro);
-  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
-  const input = {
-    startUrls: [{ url: targetUrl }],
-    maxCrawlingDepth: 0,
-    maxResultsPerCrawl: 24,
-    pageFunction: `async function pageFunction(context) {
-      const { $ } = context;
-      const items = [];
-      const nextDataEl = $('script#__NEXT_DATA__');
-      if (nextDataEl.length) {
-        try {
-          const parsed = JSON.parse(nextDataEl.html());
-          const ads = parsed?.props?.pageProps?.ads
-            || parsed?.props?.pageProps?.listingProps?.ads || [];
-          ads.forEach(ad => {
-            const preco = parseInt((ad.price || '').replace(/\\D/g, '')) || 0;
-            const link = ad.url || ad.linkUrl || '';
-            const titulo = ad.title || 'Imovel OLX';
-            if (preco > 0 && link.length > 20) items.push({ titulo, preco, link });
-          });
-        } catch(e) {}
-      }
-      return items;
-    }`,
-  };
-  try {
-    const items = await runApifyCheerio(input, token);
-    if (!Array.isArray(items) || items.length === 0) return [];
-    return items
-      .filter(i => i.preco > 0 && i.link?.length > 20)
-      .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'OLX' }));
-  } catch (e) {
-    console.log(`   ⚠️  OLX Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  }
-}
 
 async function buscarOLXScraperAPI(bairro) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
