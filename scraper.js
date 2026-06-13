@@ -1512,8 +1512,7 @@ async function buscarZapDireto(bairro) {
       return imoveis;
     }
   } catch (e) {
-    // propaga para o chamador acionar o fallback de proxy
-    throw e;
+    // não propaga ainda — deixa cair para a Tentativa 3 (Web Unlocker)
   }
 
   // ── Tentativa 3: Web Unlocker (passa Cloudflare, injeta headers glue-api)
