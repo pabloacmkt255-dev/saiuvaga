@@ -726,6 +726,8 @@ app.get('/api/admin/health', (req, res) => {
       SCRAPERAPI_KEY: envCheck('SCRAPERAPI_KEY'),
       SCRAPEDO_KEY: envCheck('SCRAPEDO_KEY'),
       BRIGHTDATA_KEY: envCheck('BRIGHTDATA_KEY'),
+      BRIGHTDATA_UNLOCKER_KEY: envCheck('BRIGHTDATA_UNLOCKER_KEY'),
+      BRIGHTDATA_UNLOCKER_ZONE: envCheck('BRIGHTDATA_UNLOCKER_ZONE'),
       ADMIN_WHATSAPP: envCheck('ADMIN_WHATSAPP'),
     },
     scraper: scraperHealth,
@@ -1133,8 +1135,74 @@ async function buscarOLXScraperAPI(bairro) {
   }
 }
 
-// Orquestra OLX: Apify primeiro, ScraperAPI como fallback
+// Busca OLX via BrightData Web Unlocker (passa por Cloudflare/anti-bot)
+async function buscarOLXWebUnlocker(bairro) {
+  const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
+  const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
+  if (!apiKey) return [];
+
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}?sf=1`;
+
+  try {
+    const { data: html } = await axios.post(
+      'https://api.brightdata.com/request',
+      { zone, url: targetUrl, format: 'raw' },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
+    );
+
+    const $ = cheerio.load(String(html));
+    const imoveis = [];
+
+    // 1) Tenta __NEXT_DATA__ (estrutura preferida, igual ScraperAPI)
+    const nextData = $('script#__NEXT_DATA__').html();
+    if (nextData) {
+      try {
+        const parsed = JSON.parse(nextData);
+        const ads = parsed?.props?.pageProps?.ads
+          || parsed?.props?.pageProps?.listingProps?.ads || [];
+        ads.forEach(ad => {
+          const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
+          const link = ad.url || ad.linkUrl || '';
+          const titulo = ad.title || `Imovel OLX - ${bairro}`;
+          if (preco > 0 && link.length > 20) {
+            imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+          }
+        });
+      } catch (pe) {
+        console.log(`   ⚠️  OLX Web Unlocker parse (__NEXT_DATA__) falhou: ${pe.message?.slice(0,40)}`);
+      }
+    }
+
+    // 2) Fallback: parse direto do DOM renderizado (cards .olx-adcard__*)
+    if (imoveis.length === 0) {
+      $('[class*="olx-adcard__price"]').each((_, el) => {
+        const precoTxt = $(el).text();
+        const preco = parseInt(precoTxt.replace(/\D/g, '')) || 0;
+        if (preco <= 0) return;
+        const card = $(el).closest('a, [class*="olx-adcard"]');
+        let link = card.is('a') ? card.attr('href') : card.find('a').first().attr('href');
+        if (link && !link.startsWith('http')) link = `https://www.olx.com.br${link}`;
+        const titulo = card.find('h2, h3').first().text().trim() || `Imovel OLX - ${bairro}`;
+        if (link && link.length > 20) {
+          imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+        }
+      });
+    }
+
+    return imoveis.filter(i => i.preco > 0 && i.link?.length > 20);
+  } catch (e) {
+    console.log(`   ⚠️  OLX Web Unlocker falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    return [];
+  }
+}
+
+// Orquestra OLX: Web Unlocker primeiro (passa Cloudflare), depois Apify, depois ScraperAPI
 async function buscarOLXHtml(bairro) {
+  if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
+    const result = await buscarOLXWebUnlocker(bairro);
+    if (result.length > 0) return result;
+  }
   if (process.env.APIFY_TOKEN_OLX || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0) {
     const result = await buscarOLXApify(bairro);
     if (result.length > 0) return result;
