@@ -728,6 +728,7 @@ app.get('/api/admin/health', (req, res) => {
       BRIGHTDATA_KEY: envCheck('BRIGHTDATA_KEY'),
       BRIGHTDATA_UNLOCKER_KEY: envCheck('BRIGHTDATA_UNLOCKER_KEY'),
       BRIGHTDATA_UNLOCKER_ZONE: envCheck('BRIGHTDATA_UNLOCKER_ZONE'),
+      BRIGHTDATA_BROWSER_WS: envCheck('BRIGHTDATA_BROWSER_WS'),
       ADMIN_WHATSAPP: envCheck('ADMIN_WHATSAPP'),
     },
     scraper: scraperHealth,
@@ -1051,7 +1052,7 @@ async function buscarVivaRealDireto(bairro) {
   }
   // 3) Web Unlocker (glue-api JSON + fallback HTML renderizado)
   if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
-    const result = await buscarVivaRealWebUnlocker(bairro);
+    const result = await buscarVivaRealPuppeteer(bairro);
     if (result.length > 0) return result;
   }
   return [];
@@ -1140,208 +1141,119 @@ async function buscarOLXScraperAPI(bairro) {
   }
 }
 
-// ─── ZAP + VivaReal via BrightData Web Unlocker ──────────────────────────────
-// ZAP e VivaReal são SPAs Next.js — os dados vêm de fetch assíncrono após
-// o React montar. O Web Unlocker com render:true + wait_for aguarda o
-// seletor de preço aparecer antes de retornar o HTML, resolvendo o problema
-// de dados assíncronos que render:true puro não resolve.
-// Estratégia em camadas:
-//   1) glue-api JSON via Web Unlocker com custom_headers (mais barato, sem JS)
-//   2) HTML renderizado com wait_for (fallback, mais caro mas mais robusto)
+// ─── ZAP + VivaReal via BrightData Scraping Browser (Puppeteer) ──────────────
+// ZAP e VivaReal exigem JS real (SPA Next.js) + passar Cloudflare. O Web
+// Unlocker "puro" não atende (filtra headers customizados, render:true não
+// aguarda dados assíncronos). A "Scraping Browser" da BrightData (Puppeteer
+// remoto via WebSocket) resolve ambos: executa JS completo e passa Cloudflare.
+//
+// URLs confirmadas (precisam do segmento "zona-oeste" para bairros da zona
+// oeste de SP, como os 5 bairros monitorados):
+//   ZAP:      https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+zona-oeste+{slug}/
+//   VivaReal: https://www.vivareal.com.br/aluguel/sp/sao-paulo/zona-oeste/{slug}/
 
-async function buscarGlueApiWebUnlocker(portal, slug) {
-  const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
-  const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
-  if (!apiKey) return null;
+const ZONA_OESTE_BAIRROS = new Set([
+  'pinheiros', 'vila-madalena', 'itaim-bibi', 'perdizes', 'moema',
+  'alto-de-pinheiros', 'jardins', 'jardim-paulista', 'butanta',
+  'vila-leopoldina', 'lapa', 'sumare', 'sumarezinho', 'jardim-america',
+]);
 
-  const isZap = portal === 'ZAP';
-  const domain  = isZap ? 'www.zapimoveis.com.br' : 'www.vivareal.com.br';
-  const apiHost = isZap ? 'glue-api.zapimoveis.com.br' : 'glue-api.vivareal.com';
-  const baseUrl = isZap
-    ? `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`
-    : `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
-
-  try {
-    const { data } = await axios.post(
-      'https://api.brightdata.com/request',
-      {
-        zone,
-        url: baseUrl,
-        format: 'raw',
-        // Injeta headers necessários para a glue-api não rejeitar
-        custom_headers: [
-          { name: 'x-domain',         value: domain },
-          { name: 'Origin',            value: `https://${domain}` },
-          { name: 'Referer',           value: `https://${domain}/` },
-          { name: 'Accept',            value: 'application/json, text/plain, */*' },
-          { name: 'Accept-Language',   value: 'pt-BR,pt;q=0.9' },
-        ],
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
-    );
-
-    // Se retornou HTML (erro Cloudflare) em vez de JSON, desiste
-    if (typeof data === 'string' && data.trim().startsWith('<')) return null;
-
-    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-    const listings = parsed?.search?.result?.listings || [];
-    return listings;
-  } catch (e) {
-    console.log(`   __ ${portal} glue-api via Web Unlocker falhou: ${e.message?.slice(0, 60)}`);
-    return null;
-  }
+async function getScrapingBrowser() {
+  const wsEndpoint = process.env.BRIGHTDATA_BROWSER_WS;
+  if (!wsEndpoint) return null;
+  const puppeteer = require('puppeteer-core');
+  return puppeteer.connect({ browserWSEndpoint: wsEndpoint });
 }
 
-async function buscarHtmlRenderedWebUnlocker(portal, slug) {
-  const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
-  const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
-  if (!apiKey) return [];
-
-  const isZap = portal === 'ZAP';
-  const targetUrl = isZap
-    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`
-    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
-  const domain = isZap ? 'www.zapimoveis.com.br' : 'www.vivareal.com.br';
-  const linkBase = isZap ? 'https://www.zapimoveis.com.br' : 'https://www.vivareal.com.br';
-
-  // Seletor que só aparece quando os dados assíncronos terminaram de carregar
-  const waitSelector = isZap
-    ? '[class*="listing-price"], [data-testid*="price"], .l-listing__price'
-    : '[class*="property-card__price"], [data-testid*="price"], .property-card__price';
-
-  try {
-    const { data: html } = await axios.post(
-      'https://api.brightdata.com/request',
-      {
-        zone,
-        url: targetUrl,
-        format: 'raw',
-        render: true,
-        // wait_for: aguarda seletor de preço aparecer no DOM (resolve dados assíncronos)
-        wait_for: waitSelector,
-        wait_timeout: 15000,
-      },
-      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 90000 }
-    );
-
-    const $ = cheerio.load(String(html));
-    const imoveis = [];
-
-    // Tenta __NEXT_DATA__ primeiro (mais confiável se disponível)
-    const nextData = $('script#__NEXT_DATA__').html();
-    if (nextData) {
-      try {
-        const parsed = JSON.parse(nextData);
-        const listings =
-          parsed?.props?.pageProps?.initialState?.results?.listings ||
-          parsed?.props?.pageProps?.results?.listings || [];
-        listings.forEach(l => {
-          const preco = parseInt(l?.listing?.pricingInfos?.[0]?.price) || 0;
-          const href  = l?.link?.href || '';
-          const link  = href ? `${linkBase}${href}` : '';
-          const titulo = l?.listing?.title || `Imovel ${portal}`;
-          if (preco > 0 && link.length > 20) {
-            imoveis.push({ titulo, preco, bairro: slug, tipo: 'residencial', portal, link });
-          }
+// Extrai {preco, link, titulo} de uma página de listagens já carregada
+async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
+  const raw = await page.evaluate((linkPart) => {
+    const out = [];
+    document.querySelectorAll(`a[href*="${linkPart}"]`).forEach(a => {
+      const txt = a.innerText || '';
+      const m = txt.match(/R\$\s*([\d.,]+)/);
+      if (m) {
+        const titleEl = a.querySelector('h2, h3');
+        out.push({
+          price: m[1],
+          href: a.href.split('?')[0],
+          title: titleEl ? titleEl.textContent.trim() : '',
         });
-      } catch (pe) {}
-    }
-
-    // Fallback: parse DOM renderizado (cards de preço visíveis após render)
-    if (imoveis.length === 0) {
-      const priceSelectors = isZap
-        ? ['[class*="listing-price"]', '[class*="price__value"]', '[data-testid*="price"]']
-        : ['[class*="property-card__price"]', '[class*="price__value"]', '[data-testid*="price"]'];
-
-      for (const sel of priceSelectors) {
-        $(sel).each((_, el) => {
-          const precoTxt = $(el).text();
-          const preco = parseInt(precoTxt.replace(/\D/g, '')) || 0;
-          if (preco <= 0) return;
-          const card = $(el).closest('a, article, [class*="listing"], [class*="property-card"]');
-          let link = card.is('a') ? card.attr('href') : card.find('a').first().attr('href');
-          if (link && !link.startsWith('http')) link = `${linkBase}${link}`;
-          const titulo = card.find('h2, h3, [class*="title"]').first().text().trim() || `Imovel ${portal}`;
-          if (link && link.length > 20) {
-            imoveis.push({ titulo, preco, bairro: slug, tipo: 'residencial', portal, link });
-          }
-        });
-        if (imoveis.length > 0) break;
       }
-    }
+    });
+    return out;
+  }, linkMustInclude);
 
-    return imoveis.filter(i => i.preco > 0 && i.link?.length > 20);
+  const seen = new Set();
+  const imoveis = [];
+  for (const item of raw) {
+    if (seen.has(item.href)) continue;
+    seen.add(item.href);
+    const preco = parseInt(String(item.price).replace(/\D/g, '')) || 0;
+    if (preco > 0 && item.href.length > 30) {
+      imoveis.push({
+        titulo: item.title || `Imovel ${portal} - ${bairro}`,
+        preco, bairro, tipo: 'residencial', portal, link: item.href,
+      });
+    }
+  }
+  return imoveis;
+}
+
+async function buscarZapPuppeteer(bairro) {
+  const browser = await getScrapingBrowser();
+  if (!browser) return [];
+
+  const slug = toSlug(bairro);
+  const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste+${slug}` : slug;
+  const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiao}/`;
+
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+    await new Promise(r => setTimeout(r, 5000));
+    const imoveis = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
+    if (imoveis.length > 0) {
+      console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${imoveis.length} imóveis`);
+    }
+    return imoveis;
   } catch (e) {
-    console.log(`   __ ${portal} HTML renderizado via Web Unlocker falhou: ${e.message?.slice(0, 60)}`);
+    console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return [];
+  } finally {
+    try { await page?.close(); } catch {}
+    try { await browser.close(); } catch {}
   }
 }
 
-async function buscarZapWebUnlocker(bairro) {
+async function buscarVivaRealPuppeteer(bairro) {
+  const browser = await getScrapingBrowser();
+  if (!browser) return [];
+
   const slug = toSlug(bairro);
+  const regiao = ZONA_OESTE_BAIRROS.has(slug) ? `zona-oeste/${slug}` : slug;
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiao}/`;
 
-  // Camada 1: glue-api JSON via Web Unlocker (mais barato, sem JS render)
-  const listings = await buscarGlueApiWebUnlocker('ZAP', slug);
-  if (listings && listings.length > 0) {
-    const imoveis = listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco:  parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'ZAP',
-        link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+  let page;
+  try {
+    page = await browser.newPage();
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+    await new Promise(r => setTimeout(r, 5000));
+    const imoveis = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
     if (imoveis.length > 0) {
-      console.log(`   ✅ ZAP glue-api via Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
-      return imoveis;
+      console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${imoveis.length} imóveis`);
     }
+    return imoveis;
+  } catch (e) {
+    console.log(`   __ VivaReal Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return [];
+  } finally {
+    try { await page?.close(); } catch {}
+    try { await browser.close(); } catch {}
   }
-
-  // Camada 2: HTML renderizado com wait_for (fallback)
-  console.log(`   __ ZAP glue-api Web Unlocker vazio, tentando HTML renderizado...`);
-  const htmlResult = await buscarHtmlRenderedWebUnlocker('ZAP', slug);
-  if (htmlResult.length > 0) {
-    const comBairro = htmlResult.map(i => ({ ...i, bairro }));
-    console.log(`   ✅ ZAP HTML renderizado OK para ${bairro}: ${comBairro.length} imóveis`);
-    return comBairro;
-  }
-
-  return [];
 }
 
-async function buscarVivaRealWebUnlocker(bairro) {
-  const slug = toSlug(bairro);
-
-  // Camada 1: glue-api JSON via Web Unlocker (mais barato, sem JS render)
-  const listings = await buscarGlueApiWebUnlocker('VivaReal', slug);
-  if (listings && listings.length > 0) {
-    const imoveis = listings
-      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
-      .map(i => ({
-        titulo: i.listing.title || `Imovel - ${bairro}`,
-        preco:  parseInt(i.listing.pricingInfos[0].price) || 0,
-        bairro, tipo: 'residencial', portal: 'VivaReal',
-        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
-      }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
-    if (imoveis.length > 0) {
-      console.log(`   ✅ VivaReal glue-api via Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
-      return imoveis;
-    }
-  }
-
-  // Camada 2: HTML renderizado com wait_for (fallback)
-  console.log(`   __ VivaReal glue-api Web Unlocker vazio, tentando HTML renderizado...`);
-  const htmlResult = await buscarHtmlRenderedWebUnlocker('VivaReal', slug);
-  if (htmlResult.length > 0) {
-    const comBairro = htmlResult.map(i => ({ ...i, bairro }));
-    console.log(`   ✅ VivaReal HTML renderizado OK para ${bairro}: ${comBairro.length} imóveis`);
-    return comBairro;
-  }
-
-  return [];
-}
 
 // Busca OLX via BrightData Web Unlocker (passa por Cloudflare/anti-bot)
 async function buscarOLXWebUnlocker(bairro) {
@@ -1517,7 +1429,7 @@ async function buscarZapDireto(bairro) {
 
   // ── Tentativa 3: Web Unlocker (passa Cloudflare, injeta headers glue-api)
   if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
-    const result = await buscarZapWebUnlocker(bairro);
+    const result = await buscarZapPuppeteer(bairro);
     if (result.length > 0) return result;
   }
 
