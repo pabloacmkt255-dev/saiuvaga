@@ -221,7 +221,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
         <div class="filter-section">
           <label class="filter-label">Bairros</label>
           <div class="bairro-input-row">
-            <input type="text" class="filter-input" id="bairro-input" placeholder="Adicionar bairro..." list="bairros-dl" autocomplete="off">
+            <input type="text" class="filter-input" id="bairro-input" placeholder="Adicionar bairro..." list="bairros-dl" autocomplete="off" onchange="addBairroAuto()">
             <datalist id="bairros-dl">
               <option value="Pinheiros"><option value="Vila Madalena"><option value="Moema"><option value="Itaim Bibi">
               <option value="Jardim Paulista"><option value="Brooklin"><option value="Perdizes"><option value="Santa Cecília">
@@ -454,6 +454,16 @@ function showWall(tipo) {
 }
 
 // ── Bairros ───────────────────────────────────────────────────
+function addBairroAuto() {
+  // Chamado quando usuário seleciona opção do datalist (click ou seta)
+  const inp = document.getElementById('bairro-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  // Verifica se o valor é uma das opções válidas do datalist
+  const opts = Array.from(document.querySelectorAll('#bairros-dl option')).map(o => o.value);
+  if (opts.includes(val)) addBairro();
+}
+
 function addBairro() {
   const inp = document.getElementById('bairro-input');
   const val = inp.value.trim();
