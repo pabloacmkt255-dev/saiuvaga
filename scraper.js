@@ -428,6 +428,44 @@ app.post('/api/trial/ativar', async (req, res) => {
 });
 
 // -- Verificar status do usuario -----------------------------
+// -- Salvar/buscar alerta do usuário (usa service key, passa RLS) -------------
+app.post('/api/usuario/alerta', async (req, res) => {
+  try {
+    const { user_id, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max } = req.body;
+    if (!user_id) return res.status(400).json({ erro: 'user_id obrigatorio' });
+
+    const { error } = await supabase.from('users').update({
+      alerta_bairros:     alerta_bairros?.length ? alerta_bairros : null,
+      alerta_preco_max:   alerta_preco_max   || null,
+      alerta_quartos_min: alerta_quartos_min || 0,
+      alerta_area_min:    alerta_area_min    || 0,
+      alerta_tipos:       alerta_tipos       || [],
+      alerta_freq_max:    alerta_freq_max    || 'ilimitado',
+    }).eq('id', user_id);
+
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
+app.get('/api/usuario/alerta', async (req, res) => {
+  try {
+    const { user_id } = req.query;
+    if (!user_id) return res.status(400).json({ erro: 'user_id obrigatorio' });
+
+    const { data, error } = await supabase.from('users')
+      .select('alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
+      .eq('id', user_id).maybeSingle();
+
+    if (error) throw error;
+    res.json(data || {});
+  } catch (err) {
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 app.get('/api/usuario/status', async (req, res) => {
   try {
     const { user_id, email } = req.query;
