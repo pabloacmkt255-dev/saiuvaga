@@ -681,15 +681,21 @@ async function salvarAlerta() {
   btn.disabled = true; btn.textContent = 'Salvando...';
 
   try {
-    const { error } = await sb.from('users').update({
-      alerta_bairros:     bairros.length ? bairros : null,
-      alerta_preco_max:   precoMax,
-      alerta_quartos_min: quartos,
-      alerta_area_min:    area,
-      alerta_tipos:       tipo ? [tipo] : [],
-      alerta_freq_max:    'ilimitado',
-    }).eq('id', userId);
-    if (error) throw error;
+    const res = await fetch('https://saiuvaga-production.up.railway.app/api/usuario/alerta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id:            userId,
+        alerta_bairros:     bairros.length ? bairros : null,
+        alerta_preco_max:   precoMax,
+        alerta_quartos_min: quartos,
+        alerta_area_min:    area,
+        alerta_tipos:       tipo ? [tipo] : [],
+        alerta_freq_max:    'ilimitado',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Erro ao salvar');
     atualizarBotaoAlerta(true);
     showToast('✅ Alerta salvo! Você será avisado no WhatsApp assim que sair um imóvel.', 'ok');
   } catch(e) {
