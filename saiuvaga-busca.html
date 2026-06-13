@@ -374,6 +374,11 @@ async function init() {
     if (!session?.user) { window.location.href = 'saiuvaga-cadastro.html'; return; }
 
     userId = session.user.id;
+    // Injeta token de autenticação no cliente Supabase para RLS passar
+    await sb.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token || '',
+    });
     // Salva user_id e token para outras páginas usarem (persiste na sessão do browser)
     sessionStorage.setItem('sv_uid', userId);
     sessionStorage.setItem('sv_token', session.access_token || '');
@@ -495,6 +500,10 @@ function syncRange() {
 
 // ── Busca ─────────────────────────────────────────────────────
 async function buscar() {
+  if (!userId) {
+    document.getElementById('results-area').innerHTML = `<div class="state-box"><div class="state-icon">⏳</div><div class="state-title">Aguarde</div><div class="state-sub">Carregando sessão, tente novamente em instantes.</div></div>`;
+    return;
+  }
   const precoMax = parseInt(document.getElementById('preco-max').value) || null;
   const quartos  = parseInt(getToggle('quartos-group')) || 0;
   const tipo      = getToggle('tipo-group');
