@@ -84,7 +84,7 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   const mensagem = mensagemLivre || (
     `🚨 *Nova vaga - ${imovel.bairro}!*\n\n` +
     `🏠 ${imovel.titulo}\n` +
-    `💰 R$ ${imovel.preco.toLocaleString('pt-BR')}/mes\n` +
+    `💰 R$ ${(imovel.preco || 0).toLocaleString('pt-BR')}/mes\n` +
     `📍 ${imovel.bairro}, SP\n` +
     `🔗 ${imovel.link}\n\n` +
     `_Responda PARAR para cancelar alertas_`
@@ -297,6 +297,20 @@ async function processarMensagem(phone, text) {
     const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
     const ativo = user?.ativo && validade && validade > agora;
     const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
+
+    // ── Comando PARAR — cancela alertas ──────────────────────────────────────
+    if (text.trim().toUpperCase() === 'PARAR') {
+      if (user) {
+        await supabase.from('users').update({
+          alerta_bairros: null,
+          ativo: false,
+        }).ilike('whatsapp', `%${numero}%`);
+        await enviarWhatsApp(phone, null, '✅ Seus alertas foram cancelados. Para reativar, acesse saiuvaga.com.br');
+      } else {
+        await enviarWhatsApp(phone, null, 'Número não encontrado em nossa base. Acesse saiuvaga.com.br para cadastrar.');
+      }
+      return;
+    }
 
     // ── Detecta se é busca de imóvel ──────────────────────────────────────────
     const intencao = await extrairIntencaoBusca(text);
