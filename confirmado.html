@@ -75,6 +75,17 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
 .bubble-time{font-size:9px;color:#999;text-align:right;margin-top:2px}
 
 .error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r);padding:14px;font-size:13px;color:#b91c1c;margin-bottom:20px}
+
+/* Passo WhatsApp */
+.wpp-step{margin:20px 0}
+.wpp-step label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--ink3);margin-bottom:8px;text-align:left}
+.wpp-input-row{display:flex;gap:8px}
+.wpp-step input{flex:1;height:48px;border:1.5px solid var(--ln);border-radius:var(--r);padding:0 14px;font-size:15px;font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);outline:none;transition:all .2s}
+.wpp-step input:focus{border-color:var(--g);background:#fff;box-shadow:0 0 0 3px rgba(29,158,117,.1)}
+.wpp-step .btn-wpp{height:48px;padding:0 20px;background:var(--g);color:#fff;border:none;border-radius:var(--r);font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap}
+.wpp-step .btn-wpp:hover{background:var(--gdk)}
+.wpp-skip{font-size:12px;color:var(--ink3);margin-top:10px;cursor:pointer;text-decoration:underline;display:block}
+.wpp-hint{font-size:12px;color:var(--ink3);margin-top:6px;text-align:left}
 </style>
 </head>
 <body>
@@ -99,6 +110,23 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
     </div>
     <div class="title">Confirmando seu acesso...</div>
     <div class="sub">Aguarde um momento enquanto verificamos seu e-mail e ativamos seu trial.</div>
+  </div>
+
+  <!-- Estado: coletar WhatsApp (Google OAuth sem número) -->
+  <div id="state-wpp" style="display:none">
+    <div class="icon icon-success">📱</div>
+    <div class="trial-badge"><div class="pulse-dot"></div>Trial de 7 dias ativado!</div>
+    <div class="title">Só mais um passo!</div>
+    <div class="sub">Para receber alertas de imóveis no WhatsApp, informe seu número abaixo.</div>
+    <div class="wpp-step">
+      <label>Seu WhatsApp</label>
+      <div class="wpp-input-row">
+        <input type="tel" id="wpp-input" placeholder="(11) 99999-9999" maxlength="15">
+        <button class="btn-wpp" onclick="salvarWpp()">Salvar</button>
+      </div>
+      <div class="wpp-hint">Só vamos usar para enviar alertas de imóveis.</div>
+    </div>
+    <span class="wpp-skip" onclick="pularWpp()">Pular por agora →</span>
   </div>
 
   <!-- Estado: sucesso -->
@@ -153,7 +181,10 @@ const sb = createClient(
   'sb_publishable_BaesFHItlJCsDscRVaIRMA_ZnkA_hJP'
 );
 
+let currentUserId = null;
+
 async function processarUsuario(user) {
+  currentUserId = user.id;
   try {
     // Busca dados do usuário incluindo o plano escolhido no cadastro
     let { data: userData } = await sb
@@ -222,7 +253,15 @@ async function processarUsuario(user) {
 
     if (result.ok || result.ja_usou) {
       dispararTracking();
-      showSuccess();
+      // Verifica se usuário tem WhatsApp — se não tiver, pede antes de redirecionar
+      const { data: { session: s } } = await sb.auth.getSession();
+      const { data: uData } = await sb.from('users').select('whatsapp').eq('id', user.id).maybeSingle();
+      const temWpp = uData?.whatsapp && uData.whatsapp.replace(/\D/g,'').length >= 10;
+      if (!temWpp) {
+        showWppStep();
+      } else {
+        showSuccess();
+      }
     } else {
       showError(result.erro || 'Erro ao ativar trial. Entre em contato.');
     }
@@ -241,6 +280,37 @@ function dispararTracking() {
     fbq('track', 'CompleteRegistration');
     fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19});
   }
+}
+
+function showWppStep() {
+  document.getElementById('state-loading').style.display = 'none';
+  document.getElementById('state-wpp').style.display = 'block';
+  // Máscara simples
+  const inp = document.getElementById('wpp-input');
+  inp.focus();
+  inp.addEventListener('input', () => {
+    let v = inp.value.replace(/\D/g,'');
+    if (v.length <= 2) inp.value = v.length ? `(${v}` : '';
+    else if (v.length <= 7) inp.value = `(${v.slice(0,2)}) ${v.slice(2)}`;
+    else inp.value = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7,11)}`;
+  });
+}
+
+async function salvarWpp() {
+  const inp = document.getElementById('wpp-input');
+  const num = inp.value.replace(/\D/g,'');
+  if (num.length < 10) { inp.style.borderColor = '#ef4444'; inp.focus(); return; }
+  inp.style.borderColor = '';
+  const btn = document.querySelector('.btn-wpp');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+  try {
+    await sb.from('users').update({ whatsapp: num }).eq('id', currentUserId);
+  } catch(e) { console.error('Erro ao salvar wpp:', e); }
+  showSuccess();
+}
+
+function pularWpp() {
+  showSuccess();
 }
 
 function showSuccess() {
