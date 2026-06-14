@@ -153,6 +153,23 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
 .page-btn:disabled{opacity:.4;cursor:not-allowed}
 
 @media(max-width:480px){.topbar{padding:0 14px}.nav-links{display:none}}
+
+/* Botão flutuante mobile "ver resultados" */
+#btn-ver-resultados{
+  display:none;
+  position:fixed;
+  bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--g);color:#fff;
+  border:none;border-radius:99px;
+  padding:13px 28px;font-size:14px;font-weight:700;
+  font-family:'Plus Jakarta Sans',sans-serif;
+  box-shadow:0 4px 20px rgba(29,158,117,.45);
+  cursor:pointer;z-index:200;
+  white-space:nowrap;
+  animation: floatIn .3s ease;
+}
+@keyframes floatIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@media(min-width:781px){#btn-ver-resultados{display:none !important}}
 </style>
 </head>
 <body>
@@ -349,6 +366,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
 </div>
 
 <div class="toast" id="toast"></div>
+<button id="btn-ver-resultados" onclick="verResultados()">Ver resultados ↓</button>
 
 <script>
 const { createClient } = supabase;
@@ -556,6 +574,17 @@ async function buscar() {
     paginaAtual = 1;
     renderResultados();
 
+    // No mobile, rola automaticamente para os resultados
+    if (window.innerWidth <= 780) {
+      setTimeout(() => {
+        document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      // Mostra botão flutuante como fallback
+      const btnVer = document.getElementById('btn-ver-resultados');
+      btnVer.style.display = 'block';
+      setTimeout(() => { btnVer.style.display = 'none'; }, 5000);
+    }
+
   } catch(e) {
     document.getElementById('results-area').innerHTML = `<div class="state-box"><div class="state-icon">⚠️</div><div class="state-title">Erro ao buscar</div><div class="state-sub">${e.message}</div></div>`;
   } finally {
@@ -732,6 +761,11 @@ function limpar() {
   document.getElementById('results-area').innerHTML = `<div class="state-box"><div class="state-icon">🏙️</div><div class="state-title">Filtros limpos</div><div class="state-sub">Ajuste os filtros e clique em Buscar.</div></div>`;
   document.getElementById('results-topbar').style.display = 'none';
   document.getElementById('pagination').innerHTML = '';
+}
+
+function verResultados() {
+  document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('btn-ver-resultados').style.display = 'none';
 }
 
 // ── Logout ────────────────────────────────────────────────────
