@@ -755,6 +755,14 @@ function irPagina(n) {
 // ── Salvar alerta ─────────────────────────────────────────────
 async function salvarAlerta() {
   if (!userId) return;
+
+  // Exige pelo menos 1 bairro
+  if (!bairros.length) {
+    showToast('⚠️ Adicione pelo menos um bairro para ativar o alerta.', 'err');
+    document.getElementById('bairro-input').focus();
+    return;
+  }
+
   const precoMax = parseInt(document.getElementById('preco-max').value) || null;
   const quartos  = parseInt(getToggle('quartos-group')) || 0;
   const tipo      = getToggle('tipo-group');
