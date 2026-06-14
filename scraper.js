@@ -1475,13 +1475,10 @@ async function buscarZapDireto(bairro) {
     // não propaga ainda — deixa cair para a Tentativa 3 (Web Unlocker)
   }
 
-  // ── Tentativa 3: Web Unlocker (passa Cloudflare, injeta headers glue-api)
-  if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
-    const result = await buscarZapPuppeteer(bairro);
-    if (result.length > 0) return result;
-  }
+  // ── Tentativa 3: já tratado via buscarZapEVivaRealPuppeteer em buscarOLX()
+  // Não abre sessão Puppeteer aqui pra evitar sessões duplicadas/custo extra
 
-  throw new Error('Nenhum resultado nas glue-apis (VivaReal, ZAP e Web Unlocker)');
+  throw new Error('Nenhum resultado nas glue-apis (ZAP)');
 }
 
 // Fallback via proxy pago — tenta VivaReal glue-api primeiro, depois ZAP
