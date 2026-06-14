@@ -91,7 +91,8 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   );
 
   let phone = telefone.replace(/\D/g, '');
-  if (!phone.startsWith('55')) phone = '55' + phone;
+  // Remove 55 duplicado: sempre normaliza removendo 55 inicial e readicionando
+  phone = '55' + phone.replace(/^55/, '');
 
   const MAX_TENTATIVAS = 2;
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
