@@ -775,7 +775,10 @@ async function salvarAlerta() {
   try {
     const res = await fetch('https://saiuvaga-production.up.railway.app/api/usuario/alerta', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('sv_token') || ''}`,
+      },
       body: JSON.stringify({
         user_id:            userId,
         alerta_bairros:     bairros.length ? bairros : null,
