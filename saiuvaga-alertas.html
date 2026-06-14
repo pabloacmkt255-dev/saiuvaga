@@ -610,6 +610,7 @@ async function init() {
       if (session?.user) {
         uid = session.user.id;
         sessionStorage.setItem('sv_uid', uid);
+        sessionStorage.setItem('sv_token', session.access_token || '');
         document.getElementById('user-email-label').textContent = session.user.email?.split('@')[0] || 'usuário';
       }
     } catch(e) {
@@ -660,7 +661,6 @@ async function carregarDados(uid) {
     const agora = new Date();
     const validade = user.plano_validade ? new Date(user.plano_validade) : null;
     const ativo = statusAtivo || !!(user.ativo && validade && validade > agora);
-    const diasRestantes = validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0;
 
     const badge = document.getElementById('status-badge');
     const diasEl = document.getElementById('status-dias');
@@ -818,8 +818,17 @@ async function salvarAlertas() {
   };
 
   try {
-    const { error } = await sb.from('users').update(payload).eq('id', userId);
-    if (error) throw error;
+    const token = sessionStorage.getItem('sv_token') || '';
+    const res = await fetch('https://saiuvaga-production.up.railway.app/api/usuario/alerta', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ user_id: userId, ...payload }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.erro || 'Erro ao salvar');
     showToast('Alertas salvos! Você será avisado assim que surgir uma vaga. 🏠', 'success');
   } catch (e) {
     showToast('Erro ao salvar: ' + e.message, 'error');
