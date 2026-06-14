@@ -620,7 +620,8 @@ async function buscar() {
     // Filtros client-side que Supabase não suporta diretamente
     let resultado = (data || []).filter(im => {
       if (quartos > 0 && (im.quartos || 0) < quartos) return false;
-      if (area    > 0 && (im.area    || 0) < area)    return false;
+      // Só filtra área se o imóvel tem área informada (area=0 significa sem informação)
+      if (area > 0 && im.area > 0 && im.area < area) return false;
       return true;
     });
 
