@@ -1708,7 +1708,8 @@ async function verificarAlertas() {
       for (const imovel of matches) {
         // Filtros adicionais
         if (quartosMin > 0 && (imovel.quartos || 0) < quartosMin) continue;
-        if (areaMin   > 0 && (imovel.area    || 0) < areaMin)    continue;
+        // Só filtra área se o imóvel tem área informada (area=0 significa sem informação)
+        if (areaMin > 0 && imovel.area > 0 && imovel.area < areaMin) continue;
         const tipos = usuario.alerta_tipos || [];
         if (tipos.length > 0 && imovel.tipo && !tipos.includes(imovel.tipo)) continue;
 
