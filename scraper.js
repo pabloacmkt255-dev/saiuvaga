@@ -1035,19 +1035,70 @@ async function buscarVivaRealScraperAPI(bairro) {
 }
 
 async function buscarVivaRealDireto(bairro) {
-  // 1) Puppeteer via Scraping Browser (confirmado funcional, passa Cloudflare)
-  if (process.env.BRIGHTDATA_BROWSER_WS) {
-    const result = await buscarVivaRealPuppeteer(bairro);
-    if (result.length > 0) return result;
-  }
-  // 2) ScraperAPI (fallback rápido — Apify removido: bloqueado em todas
-  // as contas (full-permission-actor-not-approved), e a cascata de tokens
-  // levava 6-7min de timeout, travando o ciclo)
+  // VivaReal via Puppeteer é executado em conjunto com ZAP em buscarZapEVivaRealPuppeteer()
+  // Este wrapper existe para manter compatibilidade com o orquestrador buscarOLX()
+  // Na prática, o resultado vem de buscarZapEVivaRealPuppeteer chamado antes
   if (process.env.SCRAPERAPI_KEY) {
     const result = await buscarVivaRealScraperAPI(bairro);
     if (result.length > 0) return result;
   }
   return [];
+}
+
+// Busca ZAP + VivaReal em sequência num único browser (evita limite de sessões simultâneas)
+async function buscarZapEVivaRealPuppeteer(bairro) {
+  const wsEndpoint = process.env.BRIGHTDATA_BROWSER_WS;
+  if (!wsEndpoint) return { zap: [], vivareal: [] };
+
+  const slug = toSlug(bairro);
+  const regiaoPrefix = BAIRRO_REGIAO.get(slug);
+
+  const zapUrl = regiaoPrefix
+    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slug}/`
+    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
+
+  const vrUrl = regiaoPrefix
+    ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
+    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+
+  let browser;
+  try {
+    const puppeteer = require('puppeteer-core');
+    browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+
+    // ZAP
+    let zapResult = [];
+    try {
+      const page = await browser.newPage();
+      await page.goto(zapUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+      await new Promise(r => setTimeout(r, 5000));
+      zapResult = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
+      await page.close();
+      if (zapResult.length > 0) console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${zapResult.length} imóveis`);
+    } catch (e) {
+      console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    }
+
+    // VivaReal (mesma sessão)
+    let vrResult = [];
+    try {
+      const page = await browser.newPage();
+      await page.goto(vrUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+      await new Promise(r => setTimeout(r, 5000));
+      vrResult = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
+      await page.close();
+      if (vrResult.length > 0) console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${vrResult.length} imóveis`);
+    } catch (e) {
+      console.log(`   __ VivaReal Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    }
+
+    return { zap: zapResult, vivareal: vrResult };
+  } catch (e) {
+    console.log(`   __ Browser falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return { zap: [], vivareal: [] };
+  } finally {
+    try { await browser?.close(); } catch {}
+  }
 }
 
 // ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
@@ -1323,37 +1374,21 @@ async function buscarOLXHtml(bairro) {
 // Bairros fixos — apenas quando não há alertas configurados para o bairro
 // O scraper prioriza bairros com alertas ativos (ver rodarScraper)
 const BUSCAS = [
-  { bairro: 'Pinheiros',       region: 'pinheiros'       },
-  { bairro: 'Vila Madalena',   region: 'vila-madalena'   },
-  { bairro: 'Moema',           region: 'moema'           },
-  { bairro: 'Itaim Bibi',      region: 'itaim-bibi'      },
-  { bairro: 'Jardim Paulista',  region: 'jardim-paulista' },
-  { bairro: 'Brooklin',        region: 'brooklin'        },
-  { bairro: 'Perdizes',        region: 'perdizes'        },
-  { bairro: 'Santa Cecília',   region: 'santa-cecilia'   },
-  { bairro: 'Bela Vista',      region: 'bela-vista'      },
-  { bairro: 'Liberdade',       region: 'liberdade'       },
-  { bairro: 'Vila Mariana',    region: 'vila-mariana'    },
-  { bairro: 'Saúde',           region: 'saude'           },
-  { bairro: 'Campo Belo',      region: 'campo-belo'      },
-  { bairro: 'Lapa',            region: 'lapa'            },
-  { bairro: 'Bom Retiro',      region: 'bom-retiro'      },
-  { bairro: 'Consolação',      region: 'consolacao'      },
-  { bairro: 'República',       region: 'republica'       },
-  { bairro: 'Higienópolis',    region: 'higienopolis'    },
-  { bairro: 'Paraíso',         region: 'paraiso'         },
-  { bairro: 'Aclimação',       region: 'aclimacao'       },
-  { bairro: 'Sumaré',          region: 'sumare'          },
-  { bairro: 'Vila Pompeia',    region: 'vila-pompeia'    },
-  { bairro: 'Faria Lima',      region: 'faria-lima'      },
-  { bairro: 'Jardins',         region: 'jardins'         },
-  { bairro: 'Vila Olímpia',    region: 'vila-olimpia'    },
-  { bairro: 'Tatuapé',         region: 'tatuape'         },
-  { bairro: 'Santana',         region: 'santana'         },
-  { bairro: 'Butantã',         region: 'butanta'         },
-  { bairro: 'Morumbi',         region: 'morumbi'         },
-  { bairro: 'Santo André',     region: 'santo-andre'     },
-  { bairro: 'Vila Prudente',   region: 'vila-prudente'   },
+  { bairro: 'Pinheiros',      region: 'pinheiros'      },
+  { bairro: 'Vila Madalena',  region: 'vila-madalena'  },
+  { bairro: 'Moema',          region: 'moema'          },
+  { bairro: 'Itaim Bibi',     region: 'itaim-bibi'     },
+  { bairro: 'Perdizes',       region: 'perdizes'        },
+  { bairro: 'Brooklin',       region: 'brooklin'        },
+  { bairro: 'Vila Mariana',   region: 'vila-mariana'   },
+  { bairro: 'Jardins',        region: 'jardins'         },
+  { bairro: 'Higienópolis',   region: 'higienopolis'   },
+  { bairro: 'Vila Olímpia',   region: 'vila-olimpia'   },
+  { bairro: 'Faria Lima',     region: 'faria-lima'     },
+  { bairro: 'Bela Vista',     region: 'bela-vista'     },
+  { bairro: 'Consolação',     region: 'consolacao'     },
+  { bairro: 'Campo Belo',     region: 'campo-belo'     },
+  { bairro: 'Jardim Paulista', region: 'jardim-paulista' },
 ];
 
 function toSlug(str) {
@@ -1506,9 +1541,23 @@ async function buscarZapViaProxy(bairro) {
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // Roda todas as fontes grátis, com pequeno jitter individual para
-  // evitar burst simultâneo de requests (padrão detectável por anti-bot).
-  // Fontes em cooldown (circuit breaker) são puladas e tratadas como vazias.
+  // ZAP + VivaReal via Puppeteer compartilham 1 sessão (evita limite de sessões simultâneas do BrightData)
+  let zapPuppeteer = [], vivaRealPuppeteer = [];
+  if (process.env.BRIGHTDATA_BROWSER_WS && circuitAllows('puppeteerBrowser')) {
+    try {
+      const r = await buscarZapEVivaRealPuppeteer(bairro);
+      zapPuppeteer = r.zap;
+      vivaRealPuppeteer = r.vivareal;
+      circuitSuccess('puppeteerBrowser');
+    } catch (e) {
+      circuitFail('puppeteerBrowser');
+      console.log(`   __ Browser compartilhado falhou: ${e.message?.slice(0, 60)}`);
+    }
+  } else if (!circuitAllows('puppeteerBrowser')) {
+    console.log(`   ⛔ puppeteerBrowser em cooldown (circuit breaker), pulando...`);
+  }
+
+  // OLX + demais fontes em paralelo (sem Puppeteer, só HTTP)
   const runSource = async (name, fn) => {
     if (!circuitAllows(name)) {
       console.log(`   ⛔ ${name} em cooldown (circuit breaker), pulando...`);
@@ -1525,12 +1574,14 @@ async function buscarOLX(bairro, region) {
     runSource('olxHtml', buscarOLXHtml),
   ]);
 
-  // Atualiza circuit breaker: rejeição = falha real; sucesso (mesmo vazio) = ok
+  // Atualiza circuit breaker
   if (zapDireto.status === 'fulfilled') circuitSuccess('zapDireto'); else circuitFail('zapDireto');
   if (vivaReal.status === 'fulfilled') circuitSuccess('vivaReal'); else circuitFail('vivaReal');
   if (olxHtml.status === 'fulfilled') circuitSuccess('olxHtml'); else circuitFail('olxHtml');
 
   const todos = [
+    ...zapPuppeteer,
+    ...vivaRealPuppeteer,
     ...(zapDireto.status === 'fulfilled' ? zapDireto.value : []),
     ...(vivaReal.status === 'fulfilled' ? vivaReal.value : []),
     ...(mercadoLivre.status === 'fulfilled' ? mercadoLivre.value : []),
