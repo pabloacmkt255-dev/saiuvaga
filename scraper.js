@@ -435,6 +435,12 @@ app.post('/api/usuario/alerta', async (req, res) => {
     const { user_id, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max } = req.body;
     if (!user_id) return res.status(400).json({ erro: 'user_id obrigatorio' });
 
+    // Valida token — garante que só o próprio usuário altera seu alerta
+    const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+    if (!token) return res.status(401).json({ erro: 'Autenticacao obrigatoria' });
+    const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
+
     const { error } = await supabase.from('users').update({
       alerta_bairros:     alerta_bairros?.length ? alerta_bairros : null,
       alerta_preco_max:   alerta_preco_max   || null,
