@@ -1317,6 +1317,98 @@ async function buscarVivaRealPuppeteer(bairro) {
 }
 
 
+// Busca ZAP via BrightData Web Unlocker (glue-api JSON — mesmo dado, IP rotativo)
+async function buscarZapWebUnlocker(bairro) {
+  const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
+  const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
+  if (!apiKey) return [];
+
+  const slug = toSlug(bairro);
+  const url  = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
+
+  try {
+    const { data } = await axios.post(
+      'https://api.brightdata.com/request',
+      {
+        zone, url, format: 'raw',
+        headers: {
+          'x-domain': 'www.zapimoveis.com.br',
+          'Origin': 'https://www.zapimoveis.com.br',
+          'Referer': 'https://www.zapimoveis.com.br/',
+          'Accept': 'application/json',
+        },
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
+    );
+
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    const listings = parsed?.search?.result?.listings || [];
+    const imoveis = listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel ZAP - ${bairro}`,
+        preco:  parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'ZAP',
+        link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
+        quartos: i.listing.bedrooms?.[0] || 0,
+        area:    parseInt(i.listing.usableAreas?.[0]) || 0,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+
+    if (imoveis.length > 0) console.log(`   ✅ ZAP Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
+    return imoveis;
+  } catch (e) {
+    console.log(`   __ ZAP Web Unlocker falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return [];
+  }
+}
+
+// Busca VivaReal via BrightData Web Unlocker (glue-api JSON)
+async function buscarVivaRealWebUnlocker(bairro) {
+  const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
+  const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
+  if (!apiKey) return [];
+
+  const slug = toSlug(bairro);
+  const url  = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
+
+  try {
+    const { data } = await axios.post(
+      'https://api.brightdata.com/request',
+      {
+        zone, url, format: 'raw',
+        headers: {
+          'x-domain': 'www.vivareal.com.br',
+          'Origin': 'https://www.vivareal.com.br',
+          'Referer': 'https://www.vivareal.com.br/',
+          'Accept': 'application/json',
+        },
+      },
+      { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
+    );
+
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    const listings = parsed?.search?.result?.listings || [];
+    const imoveis = listings
+      .filter(i => i?.listing?.pricingInfos?.[0]?.price)
+      .map(i => ({
+        titulo: i.listing.title || `Imovel VivaReal - ${bairro}`,
+        preco:  parseInt(i.listing.pricingInfos[0].price) || 0,
+        bairro, tipo: 'residencial', portal: 'VivaReal',
+        link: `https://www.vivareal.com.br${i.link?.href || ''}`,
+        quartos: i.listing.bedrooms?.[0] || 0,
+        area:    parseInt(i.listing.usableAreas?.[0]) || 0,
+      }))
+      .filter(i => i.preco > 0 && i.link.length > 30);
+
+    if (imoveis.length > 0) console.log(`   ✅ VivaReal Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
+    return imoveis;
+  } catch (e) {
+    console.log(`   __ VivaReal Web Unlocker falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return [];
+  }
+}
+
 // Busca OLX via BrightData Web Unlocker (passa por Cloudflare/anti-bot)
 async function buscarOLXWebUnlocker(bairro) {
   const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
@@ -1559,54 +1651,47 @@ async function buscarZapViaProxy(bairro) {
 async function buscarOLX(bairro, region) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // ZAP + VivaReal via Puppeteer compartilham 1 sessão (evita limite de sessões simultâneas do BrightData)
-  let zapPuppeteer = [], vivaRealPuppeteer = [];
-  if (process.env.BRIGHTDATA_BROWSER_WS && circuitAllows('puppeteerBrowser')) {
-    try {
-      const r = await buscarZapEVivaRealPuppeteer(bairro);
-      zapPuppeteer = r.zap;
-      vivaRealPuppeteer = r.vivareal;
-      circuitSuccess('puppeteerBrowser');
-    } catch (e) {
-      circuitFail('puppeteerBrowser');
-      console.log(`   __ Browser compartilhado falhou: ${e.message?.slice(0, 60)}`);
-    }
-  } else if (!circuitAllows('puppeteerBrowser')) {
-    console.log(`   ⛔ puppeteerBrowser em cooldown (circuit breaker), pulando...`);
-  }
-
-  // OLX + demais fontes em paralelo (sem Puppeteer, só HTTP)
+  // ZAP + VivaReal via Web Unlocker (glue-api JSON — mais estável que Puppeteer)
+  // OLX também via Web Unlocker — todas as 3 fontes em paralelo
   const runSource = async (name, fn) => {
     if (!circuitAllows(name)) {
       console.log(`   ⛔ ${name} em cooldown (circuit breaker), pulando...`);
       return [];
     }
     await jitter();
-    return fn(bairro);
+    try {
+      const result = await fn(bairro);
+      if (result.length > 0) circuitSuccess(name); else circuitFail(name);
+      return result;
+    } catch (e) {
+      circuitFail(name);
+      return [];
+    }
   };
 
-  const [zapDireto, vivaReal, mercadoLivre, olxHtml] = await Promise.allSettled([
-    runSource('zapDireto', buscarZapDireto),
-    runSource('vivaReal', buscarVivaRealDireto),
-    runSource('mercadoLivre', buscarMercadoLivre),
+  const [zapResult, vivaRealResult, olxResult] = await Promise.allSettled([
+    runSource('zapWebUnlocker', buscarZapWebUnlocker),
+    runSource('vivaRealWebUnlocker', buscarVivaRealWebUnlocker),
     runSource('olxHtml', buscarOLXHtml),
   ]);
 
-  // Atualiza circuit breaker
-  if (zapDireto.status === 'fulfilled') circuitSuccess('zapDireto'); else circuitFail('zapDireto');
-  if (vivaReal.status === 'fulfilled') circuitSuccess('vivaReal'); else circuitFail('vivaReal');
-  if (olxHtml.status === 'fulfilled') circuitSuccess('olxHtml'); else circuitFail('olxHtml');
-
   const todos = [
-    ...zapPuppeteer,
-    ...vivaRealPuppeteer,
-    ...(zapDireto.status === 'fulfilled' ? zapDireto.value : []),
-    ...(vivaReal.status === 'fulfilled' ? vivaReal.value : []),
-    ...(mercadoLivre.status === 'fulfilled' ? mercadoLivre.value : []),
-    ...(olxHtml.status === 'fulfilled' ? olxHtml.value : []),
+    ...(zapResult.status === 'fulfilled' ? zapResult.value : []),
+    ...(vivaRealResult.status === 'fulfilled' ? vivaRealResult.value : []),
+    ...(olxResult.status === 'fulfilled' ? olxResult.value : []),
   ];
 
-  // Apify ZAP dedicado — fallback quando glue-apis bloqueiam
+  // Fallback: glue-api direto (sem proxy) se Web Unlocker não retornou ZAP/VivaReal
+  if (zapResult.value?.length === 0 || vivaRealResult.value?.length === 0) {
+    const [zapDireto, vivaReal] = await Promise.allSettled([
+      zapResult.value?.length === 0 ? runSource('zapDireto', buscarZapDireto) : Promise.resolve([]),
+      vivaRealResult.value?.length === 0 ? runSource('vivaReal', buscarVivaRealDireto) : Promise.resolve([]),
+    ]);
+    if (zapDireto.status === 'fulfilled') todos.push(...zapDireto.value);
+    if (vivaReal.status === 'fulfilled') todos.push(...vivaReal.value);
+  }
+
+  // Apify ZAP dedicado — fallback quando tudo bloqueia
   let apifyZapCount = 0;
   if (todos.length === 0 && circuitAllows('apifyZap')
       && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
@@ -1629,7 +1714,7 @@ async function buscarOLX(bairro, region) {
     }
   }
 
-  // Proxy como último recurso (raramente necessário)
+  // Proxy como último recurso
   if (todos.length === 0 && circuitAllows('proxyFinal')) {
     console.log(`   ⚠️  Tentando proxy como último recurso...`);
     try {
@@ -1645,9 +1730,10 @@ async function buscarOLX(bairro, region) {
 
 
   // Diagnóstico por fonte (ZAP inclui Apify se foi usado)
-  const zapCount = zapDireto.status==='fulfilled' ? (zapDireto.value?.length||0) : apifyZapCount;
-  const zapLabel = zapDireto.status==='fulfilled' ? zapCount : (apifyZapCount > 0 ? `Apify:${apifyZapCount}` : 'ERR');
-  console.log(`   📊 Fontes brutas: ZAP=${zapLabel} VivaReal=${vivaReal.status==='fulfilled'?vivaReal.value?.length||0:'ERR'} OLX=${olxHtml.status==='fulfilled'?olxHtml.value?.length||0:'ERR'} ML=${mercadoLivre.status==='fulfilled'?mercadoLivre.value?.length||0:'ERR'}`);
+  const zapCount = (zapResult.status === 'fulfilled' ? zapResult.value?.length : 0) || 0;
+  const vrCount  = (vivaRealResult.status === 'fulfilled' ? vivaRealResult.value?.length : 0) || 0;
+  const olxCount = (olxResult.status === 'fulfilled' ? olxResult.value?.length : 0) || 0;
+  console.log(`   📊 Fontes brutas: ZAP=${zapCount} VivaReal=${vrCount} OLX=${olxCount}`);
 
   // Deduplica por link
   const unicos = [...new Map(todos.map(i => [i.link, i])).values()];
