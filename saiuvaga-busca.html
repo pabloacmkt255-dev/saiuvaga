@@ -154,6 +154,54 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
 
 @media(max-width:480px){.topbar{padding:0 14px}.nav-links{display:none}}
 
+/* ── Mobile: filtros como drawer ───────────────────────────── */
+@media(max-width:780px){
+  .sidebar{
+    position:fixed;inset:0;z-index:300;
+    display:none;
+    align-items:flex-end;
+    background:rgba(0,0,0,.45);
+    backdrop-filter:blur(2px);
+    top:0;left:0;right:0;bottom:0;
+  }
+  .sidebar.open{display:flex}
+  .filter-card{
+    width:100%;max-height:88vh;overflow-y:auto;
+    border-radius:20px 20px 0 0;
+    border-bottom:none;
+    box-shadow:0 -8px 40px rgba(0,0,0,.18);
+  }
+  .filter-head{
+    position:sticky;top:0;background:var(--wh);z-index:1;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+}
+
+/* Botão fechar dentro do filter-head (só mobile) */
+.btn-fechar-filtros{
+  display:none;
+  width:32px;height:32px;border-radius:50%;
+  background:var(--bg);border:1.5px solid var(--ln);
+  font-size:16px;line-height:1;cursor:pointer;
+  align-items:center;justify-content:center;
+  color:var(--ink3);flex-shrink:0;
+}
+@media(max-width:780px){.btn-fechar-filtros{display:flex}}
+
+/* Botão flutuante "Filtros" no mobile */
+#btn-abrir-filtros{
+  display:none;
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--g);color:#fff;
+  border:none;border-radius:99px;
+  padding:13px 28px;font-size:14px;font-weight:700;
+  font-family:'Plus Jakarta Sans',sans-serif;
+  box-shadow:0 4px 20px rgba(29,158,117,.4);
+  cursor:pointer;z-index:200;white-space:nowrap;
+}
+@media(max-width:780px){#btn-abrir-filtros{display:block}}
+@media(min-width:781px){#btn-abrir-filtros{display:none !important}}
+
 /* Botão flutuante mobile "ver resultados" */
 #btn-ver-resultados{
   display:none;
@@ -227,11 +275,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
   <div class="page">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar" onclick="fecharFiltrosBackdrop(event)">
       <div class="filter-card">
         <div class="filter-head">
-          <h2>🔍 Filtros</h2>
-          <p>Refine sua busca</p>
+          <div>
+            <h2>🔍 Filtros</h2>
+            <p>Refine sua busca</p>
+          </div>
+          <button class="btn-fechar-filtros" onclick="fecharFiltros()" aria-label="Fechar filtros">✕</button>
         </div>
 
         <!-- Bairros -->
@@ -366,6 +417,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
 </div>
 
 <div class="toast" id="toast"></div>
+<button id="btn-abrir-filtros" onclick="abrirFiltros()">🔍 Filtros</button>
 <button id="btn-ver-resultados" onclick="verResultados()">Ver resultados ↓</button>
 
 <script>
@@ -532,6 +584,8 @@ async function buscar() {
     document.getElementById('results-area').innerHTML = `<div class="state-box"><div class="state-icon">⏳</div><div class="state-title">Aguarde</div><div class="state-sub">Carregando sessão, tente novamente em instantes.</div></div>`;
     return;
   }
+  // Fecha o drawer no mobile
+  fecharFiltros();
   const precoMax = parseInt(document.getElementById('preco-max').value) || null;
   const quartos  = parseInt(getToggle('quartos-group')) || 0;
   const tipo      = getToggle('tipo-group');
@@ -766,6 +820,19 @@ function limpar() {
 function verResultados() {
   document.getElementById('results-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.getElementById('btn-ver-resultados').style.display = 'none';
+}
+
+// ── Drawer filtros (mobile) ───────────────────────────────────
+function abrirFiltros() {
+  document.getElementById('sidebar').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function fecharFiltros() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function fecharFiltrosBackdrop(e) {
+  if (e.target === document.getElementById('sidebar')) fecharFiltros();
 }
 
 // ── Logout ────────────────────────────────────────────────────
