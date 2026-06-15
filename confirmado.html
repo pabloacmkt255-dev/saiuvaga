@@ -304,7 +304,16 @@ async function salvarWpp() {
   const btn = document.querySelector('.btn-wpp');
   btn.textContent = 'Salvando...'; btn.disabled = true;
   try {
-    await sb.from('users').update({ whatsapp: num }).eq('id', currentUserId);
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token || '';
+    await fetch('https://saiuvaga-production.up.railway.app/api/usuario/alerta', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ user_id: currentUserId, whatsapp: num }),
+    });
   } catch(e) { console.error('Erro ao salvar wpp:', e); }
   showSuccess();
 }
