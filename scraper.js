@@ -446,7 +446,7 @@ app.post('/api/trial/ativar', async (req, res) => {
 // -- Salvar/buscar alerta do usuário (usa service key, passa RLS) -------------
 app.post('/api/usuario/alerta', async (req, res) => {
   try {
-    const { user_id, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max } = req.body;
+    const { user_id, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max, whatsapp } = req.body;
     if (!user_id) return res.status(400).json({ erro: 'user_id obrigatorio' });
 
     // Valida token — garante que só o próprio usuário altera seu alerta
@@ -455,14 +455,18 @@ app.post('/api/usuario/alerta', async (req, res) => {
     const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
     if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
 
-    const { error } = await supabase.from('users').update({
+    // Monta payload — inclui whatsapp se fornecido
+    const payload = {
       alerta_bairros:     alerta_bairros?.length ? alerta_bairros : null,
       alerta_preco_max:   alerta_preco_max   || null,
       alerta_quartos_min: alerta_quartos_min || 0,
       alerta_area_min:    alerta_area_min    || 0,
       alerta_tipos:       alerta_tipos       || [],
       alerta_freq_max:    alerta_freq_max    || 'ilimitado',
-    }).eq('id', user_id);
+    };
+    if (whatsapp) payload.whatsapp = whatsapp.replace(/\D/g, '');
+
+    const { error } = await supabase.from('users').update(payload).eq('id', user_id);
 
     if (error) throw error;
     res.json({ ok: true });
