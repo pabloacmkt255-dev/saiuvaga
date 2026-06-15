@@ -1340,12 +1340,17 @@ async function buscarZapWebUnlocker(bairro) {
   try {
     const resp = await axios.post(
       'https://api.brightdata.com/request',
-      { zone, url, format: 'raw', country: 'br' },
       {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        zone, url, format: 'raw', country: 'br',
+        custom_headers: [
+          { name: 'x-domain', value: 'www.zapimoveis.com.br' },
+          { name: 'Origin',   value: 'https://www.zapimoveis.com.br' },
+          { name: 'Referer',  value: 'https://www.zapimoveis.com.br/' },
+          { name: 'Accept',   value: 'application/json' },
+        ],
+      },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         timeout: 60000,
       }
     );
@@ -1399,12 +1404,17 @@ async function buscarVivaRealWebUnlocker(bairro) {
   try {
     const resp = await axios.post(
       'https://api.brightdata.com/request',
-      { zone, url, format: 'raw', country: 'br' },
       {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        zone, url, format: 'raw', country: 'br',
+        custom_headers: [
+          { name: 'x-domain', value: 'www.vivareal.com.br' },
+          { name: 'Origin',   value: 'https://www.vivareal.com.br' },
+          { name: 'Referer',  value: 'https://www.vivareal.com.br/' },
+          { name: 'Accept',   value: 'application/json' },
+        ],
+      },
+      {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         timeout: 60000,
       }
     );
