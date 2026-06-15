@@ -111,8 +111,9 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
       console.log(`   📲 WhatsApp enviado para ${phone} | id: ${res.data?.zaapId || res.data?.messageId}`);
       return true;
     } catch (err) {
-      const detail = err.response?.data?.message || err.message;
-      console.error(`   _ Erro Z-API (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${detail}`);
+      const errData = err.response?.data;
+      const detail = errData?.message || errData?.error || errData?.value || JSON.stringify(errData) || err.message;
+      console.error(`   _ Erro Z-API (tentativa ${tentativa}/${MAX_TENTATIVAS}): ${detail} | phone: ${phone} | status: ${err.response?.status}`);
       if (tentativa < MAX_TENTATIVAS) {
         await new Promise(r => setTimeout(r, 3000));
       }
