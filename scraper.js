@@ -1328,7 +1328,7 @@ async function buscarVivaRealPuppeteer(bairro) {
 }
 
 
-// Busca ZAP via BrightData Web Unlocker (glue-api JSON — mesmo dado, IP rotativo)
+// Busca ZAP via BrightData Web Unlocker (proxy HTTP — passa headers customizados)
 async function buscarZapWebUnlocker(bairro) {
   const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
   const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
@@ -1338,38 +1338,27 @@ async function buscarZapWebUnlocker(bairro) {
   const url  = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
-    const resp = await axios.post(
-      'https://api.brightdata.com/request',
-      {
-        zone, url, format: 'raw', country: 'br',
-        custom_headers: [
-          { name: 'x-domain', value: 'www.zapimoveis.com.br' },
-          { name: 'Origin',   value: 'https://www.zapimoveis.com.br' },
-          { name: 'Referer',  value: 'https://www.zapimoveis.com.br/' },
-          { name: 'Accept',   value: 'application/json' },
-        ],
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
+      `https://brd-customer-hl_f1fddda4-zone-${zone}:${apiKey}@brd.superproxy.io:22225`;
+    const agent = new HttpsProxyAgent(proxyUrl);
+
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': getRandomUA(),
+        'Accept': 'application/json',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'x-domain': 'www.zapimoveis.com.br',
+        'Origin': 'https://www.zapimoveis.com.br',
+        'Referer': 'https://www.zapimoveis.com.br/',
       },
-      {
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        timeout: 60000,
-      }
-    );
+      httpsAgent: agent,
+      proxy: false,
+      timeout: 60000,
+    });
 
-    const raw = resp.data;
-    let parsed;
-    try {
-      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch(pe) {
-      const preview = String(raw).slice(0, 150);
-      console.log(`   __ ZAP Web Unlocker: resposta não-JSON para ${bairro} — ${preview}`);
-      return [];
-    }
-
-    const listings = parsed?.search?.result?.listings || [];
-    if (listings.length === 0) {
-      const preview = JSON.stringify(parsed).slice(0, 150);
-      console.log(`   __ ZAP Web Unlocker: 0 listings para ${bairro} — resp: ${preview}`);
-    }
+    const listings = data?.search?.result?.listings || [];
+    if (listings.length === 0) console.log(`   __ ZAP Web Unlocker: 0 listings para ${bairro}`);
 
     const imoveis = listings
       .filter(i => i?.listing?.pricingInfos?.[0]?.price)
@@ -1386,13 +1375,13 @@ async function buscarZapWebUnlocker(bairro) {
     if (imoveis.length > 0) console.log(`   ✅ ZAP Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
     return imoveis;
   } catch (e) {
-    const detail = e.response?.data ? JSON.stringify(e.response.data).slice(0, 150) : e.message?.slice(0, 100);
+    const detail = e.response?.data ? JSON.stringify(e.response.data).slice(0, 100) : e.message?.slice(0, 100);
     console.log(`   __ ZAP Web Unlocker falhou para ${bairro}: ${detail}`);
     return [];
   }
 }
 
-// Busca VivaReal via BrightData Web Unlocker (glue-api JSON)
+// Busca VivaReal via BrightData Web Unlocker (proxy HTTP)
 async function buscarVivaRealWebUnlocker(bairro) {
   const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
   const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
@@ -1402,38 +1391,27 @@ async function buscarVivaRealWebUnlocker(bairro) {
   const url  = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
-    const resp = await axios.post(
-      'https://api.brightdata.com/request',
-      {
-        zone, url, format: 'raw', country: 'br',
-        custom_headers: [
-          { name: 'x-domain', value: 'www.vivareal.com.br' },
-          { name: 'Origin',   value: 'https://www.vivareal.com.br' },
-          { name: 'Referer',  value: 'https://www.vivareal.com.br/' },
-          { name: 'Accept',   value: 'application/json' },
-        ],
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
+      `https://brd-customer-hl_f1fddda4-zone-${zone}:${apiKey}@brd.superproxy.io:22225`;
+    const agent = new HttpsProxyAgent(proxyUrl);
+
+    const { data } = await axios.get(url, {
+      headers: {
+        'User-Agent': getRandomUA(),
+        'Accept': 'application/json',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'x-domain': 'www.vivareal.com.br',
+        'Origin': 'https://www.vivareal.com.br',
+        'Referer': 'https://www.vivareal.com.br/',
       },
-      {
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        timeout: 60000,
-      }
-    );
+      httpsAgent: agent,
+      proxy: false,
+      timeout: 60000,
+    });
 
-    const raw = resp.data;
-    let parsed;
-    try {
-      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    } catch(pe) {
-      const preview = String(raw).slice(0, 150);
-      console.log(`   __ VivaReal Web Unlocker: resposta não-JSON para ${bairro} — ${preview}`);
-      return [];
-    }
-
-    const listings = parsed?.search?.result?.listings || [];
-    if (listings.length === 0) {
-      const preview = JSON.stringify(parsed).slice(0, 150);
-      console.log(`   __ VivaReal Web Unlocker: 0 listings para ${bairro} — resp: ${preview}`);
-    }
+    const listings = data?.search?.result?.listings || [];
+    if (listings.length === 0) console.log(`   __ VivaReal Web Unlocker: 0 listings para ${bairro}`);
 
     const imoveis = listings
       .filter(i => i?.listing?.pricingInfos?.[0]?.price)
@@ -1450,7 +1428,7 @@ async function buscarVivaRealWebUnlocker(bairro) {
     if (imoveis.length > 0) console.log(`   ✅ VivaReal Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
     return imoveis;
   } catch (e) {
-    const detail = e.response?.data ? JSON.stringify(e.response.data).slice(0, 150) : e.message?.slice(0, 100);
+    const detail = e.response?.data ? JSON.stringify(e.response.data).slice(0, 100) : e.message?.slice(0, 100);
     console.log(`   __ VivaReal Web Unlocker falhou para ${bairro}: ${detail}`);
     return [];
   }
