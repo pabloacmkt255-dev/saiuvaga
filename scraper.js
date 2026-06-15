@@ -1773,6 +1773,7 @@ async function verificarAlertas() {
     .select('id, whatsapp, alerta_bairros, alerta_tipos, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max, plano_validade')
     .eq('ativo', true)
     .not('whatsapp', 'is', null)
+    .neq('whatsapp', '')
     .not('alerta_bairros', 'is', null);
 
   if (!usuarios || usuarios.length === 0) {
