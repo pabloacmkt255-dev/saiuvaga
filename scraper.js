@@ -1335,7 +1335,7 @@ async function buscarZapWebUnlocker(bairro) {
   if (!apiKey) return [];
 
   const slug = toSlug(bairro);
-  const url  = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
+  const url  = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
     const resp = await axios.post(
@@ -1394,7 +1394,7 @@ async function buscarVivaRealWebUnlocker(bairro) {
   if (!apiKey) return [];
 
   const slug = toSlug(bairro);
-  const url  = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=48&from=0`;
+  const url  = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
     const resp = await axios.post(
