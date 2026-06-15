@@ -9,6 +9,9 @@ const { createClient } = require('@supabase/supabase-js');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // -- Clientes ------------------------------------------------
+// Necessário para proxies BrightData que usam certificado self-signed
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -1338,10 +1341,11 @@ async function buscarZapWebUnlocker(bairro) {
   const url  = `https://glue-api.zapimoveis.com.br/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
+    const https = require('https');
     const { HttpsProxyAgent } = require('https-proxy-agent');
     const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
       `http://brd-customer-hl_f1fddda4-zone-web_unlocker1:hxvzw6m7zywj@brd.superproxy.io:33335`;
-    const agent = new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: false });
+    const agent = new HttpsProxyAgent(proxyUrl);
 
     const { data } = await axios.get(url, {
       headers: {
@@ -1355,7 +1359,14 @@ async function buscarZapWebUnlocker(bairro) {
       httpsAgent: agent,
       proxy: false,
       timeout: 60000,
+      // Ignora certificado self-signed do proxy BrightData
+      transport: https.request,
+      validateStatus: () => true,
     });
+    if (data?.error || (typeof data === 'string' && data.includes('<html'))) {
+      console.log(`   __ ZAP Web Unlocker: resposta inválida para ${bairro}`);
+      return [];
+    }
 
     const listings = data?.search?.result?.listings || [];
     if (listings.length === 0) console.log(`   __ ZAP Web Unlocker: 0 listings para ${bairro}`);
@@ -1391,10 +1402,11 @@ async function buscarVivaRealWebUnlocker(bairro) {
   const url  = `https://glue-api.vivareal.com/v2/listings?businessType=RENTAL&categoryPage=RESULT&citySlug=sao-paulo&stateSlug=sp&neighborhoodSlug=${slug}&size=12&from=0`;
 
   try {
+    const https = require('https');
     const { HttpsProxyAgent } = require('https-proxy-agent');
     const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
       `http://brd-customer-hl_f1fddda4-zone-web_unlocker1:hxvzw6m7zywj@brd.superproxy.io:33335`;
-    const agent = new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: false });
+    const agent = new HttpsProxyAgent(proxyUrl);
 
     const { data } = await axios.get(url, {
       headers: {
@@ -1408,7 +1420,13 @@ async function buscarVivaRealWebUnlocker(bairro) {
       httpsAgent: agent,
       proxy: false,
       timeout: 60000,
+      transport: https.request,
+      validateStatus: () => true,
     });
+    if (data?.error || (typeof data === 'string' && data.includes('<html'))) {
+      console.log(`   __ VivaReal Web Unlocker: resposta inválida para ${bairro}`);
+      return [];
+    }
 
     const listings = data?.search?.result?.listings || [];
     if (listings.length === 0) console.log(`   __ VivaReal Web Unlocker: 0 listings para ${bairro}`);
