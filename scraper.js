@@ -1341,7 +1341,7 @@ async function buscarZapWebUnlocker(bairro) {
     const { HttpsProxyAgent } = require('https-proxy-agent');
     const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
       `http://brd-customer-hl_f1fddda4-zone-web_unlocker1:hxvzw6m7zywj@brd.superproxy.io:33335`;
-    const agent = new HttpsProxyAgent(proxyUrl);
+    const agent = new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: false });
 
     const { data } = await axios.get(url, {
       headers: {
@@ -1394,7 +1394,7 @@ async function buscarVivaRealWebUnlocker(bairro) {
     const { HttpsProxyAgent } = require('https-proxy-agent');
     const proxyUrl = process.env.BRIGHTDATA_UNLOCKER_PROXY_URL ||
       `http://brd-customer-hl_f1fddda4-zone-web_unlocker1:hxvzw6m7zywj@brd.superproxy.io:33335`;
-    const agent = new HttpsProxyAgent(proxyUrl);
+    const agent = new HttpsProxyAgent(proxyUrl, { rejectUnauthorized: false });
 
     const { data } = await axios.get(url, {
       headers: {
