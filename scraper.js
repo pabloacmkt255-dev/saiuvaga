@@ -1359,9 +1359,6 @@ async function buscarZapWebUnlocker(bairro) {
       httpsAgent: agent,
       proxy: false,
       timeout: 60000,
-      // Ignora certificado self-signed do proxy BrightData
-      transport: https.request,
-      validateStatus: () => true,
     });
     if (data?.error || (typeof data === 'string' && data.includes('<html'))) {
       console.log(`   __ ZAP Web Unlocker: resposta inválida para ${bairro}`);
@@ -1420,8 +1417,6 @@ async function buscarVivaRealWebUnlocker(bairro) {
       httpsAgent: agent,
       proxy: false,
       timeout: 60000,
-      transport: https.request,
-      validateStatus: () => true,
     });
     if (data?.error || (typeof data === 'string' && data.includes('<html'))) {
       console.log(`   __ VivaReal Web Unlocker: resposta inválida para ${bairro}`);
