@@ -94,6 +94,12 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
   // Remove 55 duplicado: sempre normaliza removendo 55 inicial e readicionando
   phone = '55' + phone.replace(/^55/, '');
 
+  // Valida número mínimo (55 + DDD 2 dígitos + número 8-9 dígitos = 12-13 dígitos)
+  if (phone.length < 12) {
+    console.error(`   _ WhatsApp inválido ignorado: "${telefone}" → "${phone}"`);
+    return false;
+  }
+
   const MAX_TENTATIVAS = 2;
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
