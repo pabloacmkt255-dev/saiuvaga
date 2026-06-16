@@ -51,6 +51,8 @@ function jitter(minMs = 800, maxMs = 4000) {
 // que está banido.
 const CIRCUIT_THRESHOLD   = 3;                  // falhas seguidas até abrir o circuito
 const CIRCUIT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h de cooldown
+// Scraping Browser (Puppeteer) custa $8-11/GB — cooldown maior para economizar saldo
+const CIRCUIT_COOLDOWN_PUPPETEER_MS = 6 * 60 * 60 * 1000; // 6h de cooldown
 const circuitState = {};
 
 function circuitAllows(source) {
@@ -67,8 +69,12 @@ function circuitFail(source) {
   const s = circuitState[source] || (circuitState[source] = { failCount: 0, cooldownUntil: 0 });
   s.failCount++;
   if (s.failCount >= CIRCUIT_THRESHOLD) {
-    s.cooldownUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
-    console.log(`   ⛔ Circuit breaker: ${source} em cooldown por 2h (${s.failCount} falhas seguidas)`);
+    // Puppeteer usa Scraping Browser pago ($8-11/GB) — cooldown 6h para economizar saldo
+    const isPuppeteer = source.toLowerCase().includes('puppeteer') || source === 'scrapingBrowser';
+    const cooldown = isPuppeteer ? CIRCUIT_COOLDOWN_PUPPETEER_MS : CIRCUIT_COOLDOWN_MS;
+    const horas = isPuppeteer ? '6h' : '2h';
+    s.cooldownUntil = Date.now() + cooldown;
+    console.log(`   ⛔ Circuit breaker: ${source} em cooldown por ${horas} (${s.failCount} falhas seguidas)`);
   }
 }
 function circuitSuccess(source) {
@@ -1081,6 +1087,27 @@ async function buscarVivaRealDireto(bairro) {
 }
 
 // Busca ZAP + VivaReal em sequência num único browser (evita limite de sessões simultâneas)
+// Tipos de recurso bloqueados para economizar tráfego no Scraping Browser (~60-70% menos GB)
+const PUPPETEER_BLOCK_TYPES = new Set(['image', 'media', 'font', 'stylesheet', 'ping', 'other']);
+
+async function abrirPaginaEconomica(browser, url, timeout = 60000) {
+  const page = await browser.newPage();
+  // Intercepta requests e bloqueia recursos pesados
+  await page.setRequestInterception(true);
+  page.on('request', req => {
+    if (PUPPETEER_BLOCK_TYPES.has(req.resourceType())) {
+      req.abort();
+    } else {
+      req.continue();
+    }
+  });
+  // domcontentloaded é muito mais rápido que networkidle2 e transfere menos dados
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+  // Aguarda pequeno delay para JS renderizar os imóveis no DOM
+  await new Promise(r => setTimeout(r, 3000));
+  return page;
+}
+
 async function buscarZapEVivaRealPuppeteer(bairro) {
   const wsEndpoint = process.env.BRIGHTDATA_BROWSER_WS;
   if (!wsEndpoint) return { zap: [], vivareal: [] };
@@ -1101,12 +1128,10 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
     const puppeteer = require('puppeteer-core');
     browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
 
-    // ZAP
+    // ZAP — página econômica (sem imagens/CSS/fonts)
     let zapResult = [];
     try {
-      const page = await browser.newPage();
-      await page.goto(zapUrl, { waitUntil: 'networkidle2', timeout: 90000 });
-      await new Promise(r => setTimeout(r, 5000));
+      const page = await abrirPaginaEconomica(browser, zapUrl);
       zapResult = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
       await page.close();
       if (zapResult.length > 0) console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${zapResult.length} imóveis`);
@@ -1114,12 +1139,10 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
       console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     }
 
-    // VivaReal (mesma sessão)
+    // VivaReal — mesma sessão, mesma estratégia econômica
     let vrResult = [];
     try {
-      const page = await browser.newPage();
-      await page.goto(vrUrl, { waitUntil: 'networkidle2', timeout: 90000 });
-      await new Promise(r => setTimeout(r, 5000));
+      const page = await abrirPaginaEconomica(browser, vrUrl);
       vrResult = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
       await page.close();
       if (vrResult.length > 0) console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${vrResult.length} imóveis`);
@@ -1723,12 +1746,19 @@ async function buscarOLX(bairro, region) {
   }
 
   // Fallback: Scraping Browser (Puppeteer) se ZAP ou VivaReal ainda sem resultado
+  // Caro ($8-11/GB) — só aciona se circuit breaker permitir e realmente não há dados
   const zapTotal = todos.filter(i => i.portal === 'ZAP').length;
   const vrTotal  = todos.filter(i => i.portal === 'VivaReal').length;
-  if ((zapTotal === 0 || vrTotal === 0) && process.env.BRIGHTDATA_BROWSER_WS) {
+  if ((zapTotal === 0 || vrTotal === 0) && process.env.BRIGHTDATA_BROWSER_WS && circuitAllows('puppeteer')) {
     console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro}...`);
     try {
       const puppeteerResult = await buscarZapEVivaRealPuppeteer(bairro);
+      const puppeteerOk = (puppeteerResult.zap?.length || 0) + (puppeteerResult.vivareal?.length || 0) > 0;
+      if (puppeteerOk) {
+        circuitSuccess('puppeteer');
+      } else {
+        circuitFail('puppeteer');
+      }
       if (puppeteerResult.zap?.length > 0) {
         todos.push(...puppeteerResult.zap);
         console.log(`   ✅ ZAP Puppeteer fallback: ${puppeteerResult.zap.length} imóveis`);
@@ -1738,6 +1768,7 @@ async function buscarOLX(bairro, region) {
         console.log(`   ✅ VivaReal Puppeteer fallback: ${puppeteerResult.vivareal.length} imóveis`);
       }
     } catch (e) {
+      circuitFail('puppeteer');
       console.log(`   __ Scraping Browser falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     }
   }
