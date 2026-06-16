@@ -277,6 +277,7 @@ function dispararTracking() {
     gtag('event', 'sign_up', {'method': 'email_confirmed'});
   }
   if (typeof fbq !== 'undefined') {
+    fbq('track', 'Lead');
     fbq('track', 'CompleteRegistration');
     fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19});
   }
