@@ -1115,9 +1115,23 @@ async function abrirPaginaEconomica(browser, url, timeout = 60000) {
       req.continue();
     }
   });
-  // networkidle2 garante que o JS terminou de renderizar os cards
-  await page.goto(url, { waitUntil: 'networkidle2', timeout });
-  await new Promise(r => setTimeout(r, 3000));
+  // domcontentloaded é rápido; depois waitForSelector espera os cards aparecerem
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+
+  // Aguarda seletor de card de imóvel ou timeout de 20s — o que vier primeiro
+  const cardSelectors = [
+    'a[href*="/imovel/"]',          // ZAP e VivaReal
+    '[data-testid="listing-card"]', // VivaReal alternativo
+    '.listing-card',
+    'article',
+  ];
+  for (const sel of cardSelectors) {
+    try {
+      await page.waitForSelector(sel, { timeout: 20000 });
+      break; // achou um selector, para
+    } catch {}
+  }
+  await new Promise(r => setTimeout(r, 2000));
   return page;
 }
 
@@ -1286,7 +1300,8 @@ async function getScrapingBrowser() {
 async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
   const raw = await page.evaluate((linkPart) => {
     const out = [];
-    document.querySelectorAll(`a[href*="${linkPart}"]`).forEach(a => {
+    const allLinks = document.querySelectorAll(`a[href*="${linkPart}"]`);
+    allLinks.forEach(a => {
       const txt = a.innerText || '';
       const m = txt.match(/R\$\s*([\d.,]+)/);
       if (m) {
@@ -1298,8 +1313,30 @@ async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
         });
       }
     });
-    return out;
+    // Debug: retorna contagem de links mesmo sem preço para diagnóstico
+    return { items: out, totalLinks: allLinks.length, bodySnippet: document.body?.innerText?.slice(0, 200) || '' };
   }, linkMustInclude);
+
+  // Log diagnóstico quando não acha imóveis
+  if (raw.items?.length === 0) {
+    console.log(`   __ ${portal} extrairImoveisDaPagina: ${raw.totalLinks} links "${linkMustInclude}" encontrados | body: ${raw.bodySnippet?.replace(/\s+/g,' ').slice(0,150)}`);
+  }
+
+  const seen = new Set();
+  const imoveis = [];
+  for (const item of (raw.items || raw)) {
+    if (seen.has(item.href)) continue;
+    seen.add(item.href);
+    const preco = parseInt(String(item.price).replace(/\D/g, '')) || 0;
+    if (preco > 0 && item.href.length > 30) {
+      imoveis.push({
+        titulo: item.title || `Imovel ${portal} - ${bairro}`,
+        preco, bairro, tipo: 'residencial', portal, link: item.href,
+      });
+    }
+  }
+  return imoveis;
+}
 
   const seen = new Set();
   const imoveis = [];
