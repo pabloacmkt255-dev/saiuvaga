@@ -1107,6 +1107,11 @@ const PUPPETEER_BLOCK_TYPES = new Set(['image', 'media', 'font', 'ping', 'other'
 
 async function abrirPaginaEconomica(browser, url, timeout = 60000) {
   const page = await browser.newPage();
+  // Mascara sinais de automação (reduz detecção anti-bot)
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  });
   await page.setRequestInterception(true);
   page.on('request', req => {
     if (PUPPETEER_BLOCK_TYPES.has(req.resourceType())) {
@@ -1292,13 +1297,6 @@ const BAIRRO_REGIAO = new Map([
   // (sem prefixo de região, scraper vai usar só o slug)
 ]);
 
-async function getScrapingBrowser() {
-  const wsEndpoint = process.env.BRIGHTDATA_BROWSER_WS;
-  if (!wsEndpoint) return null;
-  const puppeteer = require('puppeteer-core');
-  return puppeteer.connect({ browserWSEndpoint: wsEndpoint });
-}
-
 // Extrai {preco, link, titulo} de uma página de listagens já carregada
 async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
   const raw = await page.evaluate((linkPart) => {
@@ -1342,62 +1340,6 @@ async function extrairImoveisDaPagina(page, portal, bairro, linkMustInclude) {
 }
 
 
-async function buscarZapPuppeteer(bairro) {
-  const slug = toSlug(bairro);
-  const regiaoPrefix = BAIRRO_REGIAO.get(slug);
-  const regiao = regiaoPrefix ? `${regiaoPrefix}+${slug}` : slug;
-  const targetUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiao}/`;
-
-  let browser, page;
-  try {
-    browser = await getScrapingBrowser();
-    if (!browser) return [];
-    page = await browser.newPage();
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
-    await new Promise(r => setTimeout(r, 5000));
-    const imoveis = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
-    if (imoveis.length > 0) {
-      console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${imoveis.length} imóveis`);
-    }
-    return imoveis;
-  } catch (e) {
-    console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  } finally {
-    try { await page?.close(); } catch {}
-    try { await browser?.close(); } catch {}
-  }
-}
-
-async function buscarVivaRealPuppeteer(bairro) {
-  const slug = toSlug(bairro);
-  const regiaoPrefix = BAIRRO_REGIAO.get(slug);
-  const regiao = regiaoPrefix ? `${regiaoPrefix}/${slug}` : slug;
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiao}/`;
-
-  let browser, page;
-  try {
-    browser = await getScrapingBrowser();
-    if (!browser) return [];
-    page = await browser.newPage();
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 90000 });
-    await new Promise(r => setTimeout(r, 5000));
-    const imoveis = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
-    if (imoveis.length > 0) {
-      console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${imoveis.length} imóveis`);
-    }
-    return imoveis;
-  } catch (e) {
-    console.log(`   __ VivaReal Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return [];
-  } finally {
-    try { await page?.close(); } catch {}
-    try { await browser?.close(); } catch {}
-  }
-}
-
-
-// Busca ZAP via BrightData Web Unlocker (API REST com headers via super-proxy)
 // ─── Helpers para extrair imóveis do __NEXT_DATA__ do ZAP/VivaReal HTML ────────
 function extrairZapDeNextData(parsed, bairro) {
   // O ZAP embute os listings em várias estruturas dependendo da versão da página
@@ -1807,26 +1749,30 @@ async function buscarOLX(bairro, region) {
   // Caro ($8-11/GB) — só aciona se circuit breaker permitir e realmente não há dados
   const zapTotal = todos.filter(i => i.portal === 'ZAP').length;
   const vrTotal  = todos.filter(i => i.portal === 'VivaReal').length;
-  if ((zapTotal === 0 || vrTotal === 0) && process.env.BRIGHTDATA_BROWSER_WS && circuitAllows('puppeteer')) {
+  // Circuit breakers separados: ZAP bloqueado não penaliza VivaReal
+  const needZap = zapTotal === 0 && circuitAllows('puppeteerZap');
+  const needVr  = vrTotal === 0  && circuitAllows('puppeteerVr');
+  if ((needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) {
     console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro}...`);
     try {
       const puppeteerResult = await buscarZapEVivaRealPuppeteer(bairro);
-      const puppeteerOk = (puppeteerResult.zap?.length || 0) + (puppeteerResult.vivareal?.length || 0) > 0;
-      if (puppeteerOk) {
-        circuitSuccess('puppeteer');
-      } else {
-        circuitFail('puppeteer');
-      }
       if (puppeteerResult.zap?.length > 0) {
         todos.push(...puppeteerResult.zap);
+        circuitSuccess('puppeteerZap');
         console.log(`   ✅ ZAP Puppeteer fallback: ${puppeteerResult.zap.length} imóveis`);
+      } else if (needZap) {
+        circuitFail('puppeteerZap');
       }
       if (puppeteerResult.vivareal?.length > 0) {
         todos.push(...puppeteerResult.vivareal);
+        circuitSuccess('puppeteerVr');
         console.log(`   ✅ VivaReal Puppeteer fallback: ${puppeteerResult.vivareal.length} imóveis`);
+      } else if (needVr) {
+        circuitFail('puppeteerVr');
       }
     } catch (e) {
-      circuitFail('puppeteer');
+      if (needZap) circuitFail('puppeteerZap');
+      if (needVr)  circuitFail('puppeteerVr');
       console.log(`   __ Scraping Browser falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     }
   }
