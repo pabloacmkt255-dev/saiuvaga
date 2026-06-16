@@ -1127,11 +1127,12 @@ async function abrirPaginaEconomica(browser, url, timeout = 60000) {
   ];
   for (const sel of cardSelectors) {
     try {
-      await page.waitForSelector(sel, { timeout: 20000 });
+      await page.waitForSelector(sel, { timeout: 25000 });
       break; // achou um selector, para
     } catch {}
   }
-  await new Promise(r => setTimeout(r, 2000));
+  // Aguarda JS renderizar preços nos cards
+  await new Promise(r => setTimeout(r, 4000));
   return page;
 }
 
@@ -1148,10 +1149,12 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
   const slug = toSlug(bairro);
   const regiaoPrefix = BAIRRO_REGIAO.get(slug);
 
-  // ZAP: sem região no path (zona-oeste causa "página não encontrada" via Puppeteer)
-  const zapUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
+  // ZAP: com zona-oeste no path (confirmado via Playground: 15 links /imovel/)
+  const zapUrl = regiaoPrefix
+    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slug}/`
+    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
 
-  // VivaReal: com região no path (funciona corretamente)
+  // VivaReal: com região no path
   const vrUrl = regiaoPrefix
     ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
     : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
