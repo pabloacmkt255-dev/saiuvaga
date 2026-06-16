@@ -1101,12 +1101,12 @@ async function buscarVivaRealDireto(bairro) {
 }
 
 // Busca ZAP + VivaReal em sequência num único browser (evita limite de sessões simultâneas)
-// Tipos de recurso bloqueados para economizar tráfego no Scraping Browser (~60-70% menos GB)
-const PUPPETEER_BLOCK_TYPES = new Set(['image', 'media', 'font', 'stylesheet', 'ping', 'other']);
+// Tipos de recurso bloqueados para economizar tráfego no Scraping Browser
+// CSS é mantido pois ZAP/VivaReal precisam dele para renderizar os cards de imóveis
+const PUPPETEER_BLOCK_TYPES = new Set(['image', 'media', 'font', 'ping', 'other']);
 
 async function abrirPaginaEconomica(browser, url, timeout = 60000) {
   const page = await browser.newPage();
-  // Intercepta requests e bloqueia recursos pesados
   await page.setRequestInterception(true);
   page.on('request', req => {
     if (PUPPETEER_BLOCK_TYPES.has(req.resourceType())) {
@@ -1115,11 +1115,16 @@ async function abrirPaginaEconomica(browser, url, timeout = 60000) {
       req.continue();
     }
   });
-  // domcontentloaded é muito mais rápido que networkidle2 e transfere menos dados
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
-  // Aguarda pequeno delay para JS renderizar os imóveis no DOM
+  // networkidle2 garante que o JS terminou de renderizar os cards
+  await page.goto(url, { waitUntil: 'networkidle2', timeout });
   await new Promise(r => setTimeout(r, 3000));
   return page;
+}
+
+// Abre uma sessão Puppeteer isolada (1 domínio por sessão evita "domain limit")
+async function abrirSessaoPuppeteer(wsEndpoint) {
+  const puppeteer = require('puppeteer-core');
+  return puppeteer.connect({ browserWSEndpoint: wsEndpoint });
 }
 
 async function buscarZapEVivaRealPuppeteer(bairro) {
@@ -1137,40 +1142,39 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
     ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
     : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
 
-  let browser;
+  // ── ZAP: sessão própria (1 domínio por sessão = sem "Page.navigate domain limit")
+  let zapResult = [];
+  let zapBrowser;
   try {
-    const puppeteer = require('puppeteer-core');
-    browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
-
-    // ZAP — página econômica (sem imagens/CSS/fonts)
-    let zapResult = [];
-    try {
-      const page = await abrirPaginaEconomica(browser, zapUrl);
-      zapResult = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
-      await page.close();
-      if (zapResult.length > 0) console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${zapResult.length} imóveis`);
-    } catch (e) {
-      console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    }
-
-    // VivaReal — mesma sessão, mesma estratégia econômica
-    let vrResult = [];
-    try {
-      const page = await abrirPaginaEconomica(browser, vrUrl);
-      vrResult = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
-      await page.close();
-      if (vrResult.length > 0) console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${vrResult.length} imóveis`);
-    } catch (e) {
-      console.log(`   __ VivaReal Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    }
-
-    return { zap: zapResult, vivareal: vrResult };
+    zapBrowser = await abrirSessaoPuppeteer(wsEndpoint);
+    const page = await abrirPaginaEconomica(zapBrowser, zapUrl);
+    zapResult = await extrairImoveisDaPagina(page, 'ZAP', bairro, '/imovel/');
+    await page.close();
+    if (zapResult.length > 0) console.log(`   ✅ ZAP Puppeteer OK para ${bairro}: ${zapResult.length} imóveis`);
+    else console.log(`   __ ZAP Puppeteer: 0 imóveis para ${bairro}`);
   } catch (e) {
-    console.log(`   __ Browser falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
-    return { zap: [], vivareal: [] };
+    console.log(`   __ ZAP Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 80)}`);
   } finally {
-    try { await browser?.close(); } catch {}
+    try { await zapBrowser?.close(); } catch {}
   }
+
+  // ── VivaReal: sessão própria separada
+  let vrResult = [];
+  let vrBrowser;
+  try {
+    vrBrowser = await abrirSessaoPuppeteer(wsEndpoint);
+    const page = await abrirPaginaEconomica(vrBrowser, vrUrl);
+    vrResult = await extrairImoveisDaPagina(page, 'VivaReal', bairro, '/imovel/');
+    await page.close();
+    if (vrResult.length > 0) console.log(`   ✅ VivaReal Puppeteer OK para ${bairro}: ${vrResult.length} imóveis`);
+    else console.log(`   __ VivaReal Puppeteer: 0 imóveis para ${bairro}`);
+  } catch (e) {
+    console.log(`   __ VivaReal Puppeteer falhou para ${bairro}: ${e.message?.slice(0, 80)}`);
+  } finally {
+    try { await vrBrowser?.close(); } catch {}
+  }
+
+  return { zap: zapResult, vivareal: vrResult };
 }
 
 // ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
