@@ -1430,10 +1430,12 @@ async function buscarZapWebUnlocker(bairro) {
       { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
     );
 
-    const $ = cheerio.load(String(html));
+    const htmlStr = String(html);
+    const $ = cheerio.load(htmlStr);
     const nextDataRaw = $('script#__NEXT_DATA__').html();
     if (!nextDataRaw) {
-      console.log(`   __ ZAP Web Unlocker: __NEXT_DATA__ ausente para ${bairro}`);
+      // Log primeiros 300 chars para diagnosticar CAPTCHA/redirect
+      console.log(`   __ ZAP Web Unlocker: __NEXT_DATA__ ausente para ${bairro} | HTML[0:300]: ${htmlStr.replace(/\s+/g,' ').slice(0,300)}`);
       return [];
     }
 
@@ -1469,10 +1471,11 @@ async function buscarVivaRealWebUnlocker(bairro) {
       { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
     );
 
-    const $ = cheerio.load(String(html));
+    const htmlStr = String(html);
+    const $ = cheerio.load(htmlStr);
     const nextDataRaw = $('script#__NEXT_DATA__').html();
     if (!nextDataRaw) {
-      console.log(`   __ VivaReal Web Unlocker: __NEXT_DATA__ ausente para ${bairro}`);
+      console.log(`   __ VivaReal Web Unlocker: __NEXT_DATA__ ausente para ${bairro} | HTML[0:300]: ${htmlStr.replace(/\s+/g,' ').slice(0,300)}`);
       return [];
     }
 
