@@ -965,7 +965,21 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   const scrapeDoKey   = process.env.SCRAPEDO_KEY;
   const brightDataKey = process.env.BRIGHTDATA_KEY;
 
-  // 0) Proxy residencial (mais resistente a bans de IP de datacenter)
+  // 0a) Proxy ISP saiuvaga — $2/mês fixo, IP residencial/ISP, aceita headers customizados (x-domain)
+  //     Ideal para ZAP/VivaReal glue-api que bloqueia IPs de datacenter
+  //     Variável: BRIGHTDATA_ISP_PROXY_URL (fallback para URL hardcoded)
+  try {
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const ispProxyUrl = process.env.BRIGHTDATA_ISP_PROXY_URL || 'http://brd-customer-hl_f1fddda4-zone-saiuvaga:p2d30ss8gsfd@brd.superproxy.io:33335';
+    const ispAgent = new HttpsProxyAgent(ispProxyUrl);
+    const res = await axios.get(url, { headers, timeout, httpAgent: ispAgent, httpsAgent: ispAgent, proxy: false });
+    if (res.status >= 400) throw new Error(`status ${res.status}`);
+    return res;
+  } catch (e) {
+    console.log(`   __ ISP proxy falhou (${e.message?.slice(0,50)}), tentando próximo...`);
+  }
+
+  // 0b) Proxy residencial (mais resistente a bans de IP de datacenter)
   if (residentialProxyUrl) {
     try {
       const { HttpsProxyAgent } = require('https-proxy-agent');
