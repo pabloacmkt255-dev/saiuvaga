@@ -926,7 +926,7 @@ async function buscarViaApify(bairro) {
     // cheerio-scraper retorna items diretos já mapeados
     if (items[0]?.link) {
       return items
-        .filter(i => i.preco > 0 && i.link?.length > 20)
+        .filter(i => i.preco > 0 && i.preco <= 15000 && i.link?.length > 20)
         .map(i => ({ ...i, bairro, tipo: 'residencial', portal: 'ZAP' }));
     }
 
@@ -946,7 +946,7 @@ async function buscarViaApify(bairro) {
         const bairroDado = i.location?.neighborhood || bairro;
         return { titulo, preco, bairro: bairroDado, tipo: 'residencial', portal: 'ZAP', link };
       })
-      .filter(i => i.preco > 0 && i.link.length > 20);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 20);
   } catch (e) {
     console.log(`   __ Apify falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
     return null; // null = tenta fallback
@@ -1375,7 +1375,7 @@ async function buscarZapWebUnlocker(bairro) {
         quartos: i.listing.bedrooms?.[0] || 0,
         area:    parseInt(i.listing.usableAreas?.[0]) || 0,
       }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
 
     if (imoveis.length > 0) console.log(`   ✅ ZAP Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
     return imoveis;
@@ -1429,7 +1429,7 @@ async function buscarVivaRealWebUnlocker(bairro) {
         quartos: i.listing.bedrooms?.[0] || 0,
         area:    parseInt(i.listing.usableAreas?.[0]) || 0,
       }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
 
     if (imoveis.length > 0) console.log(`   ✅ VivaReal Web Unlocker OK para ${bairro}: ${imoveis.length} imóveis`);
     return imoveis;
@@ -1495,7 +1495,7 @@ async function buscarOLXWebUnlocker(bairro) {
       });
     }
 
-    return imoveis.filter(i => i.preco > 0 && i.link?.length > 20);
+    return imoveis.filter(i => i.preco > 0 && i.preco <= 15000 && i.link?.length > 20);
   } catch (e) {
     console.log(`   ⚠️  OLX Web Unlocker falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
     return [];
@@ -1576,7 +1576,7 @@ async function buscarZapDireto(bairro) {
         bairro, tipo: 'residencial', portal: 'VivaReal',
         link: `https://www.vivareal.com.br${i.link?.href || ''}`,
       }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
     if (imoveis.length > 0) {
       console.log(`   ✅ VivaReal glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
       return imoveis;
@@ -1610,7 +1610,7 @@ async function buscarZapDireto(bairro) {
         bairro, tipo: 'residencial', portal: 'ZAP',
         link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
       }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
     if (imoveis.length > 0) {
       console.log(`   ✅ ZAP glue-api OK para ${bairro}: ${imoveis.length} imóveis`);
       return imoveis;
@@ -1650,7 +1650,7 @@ async function buscarZapViaProxy(bairro) {
         bairro, tipo: 'residencial', portal: 'VivaReal',
         link: `https://www.vivareal.com.br${i.link?.href || ''}`,
       }))
-      .filter(i => i.preco > 0 && i.link.length > 30);
+      .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
     if (imoveis.length > 0) return imoveis;
   } catch (e) {
     console.log(`   __ Proxy VivaReal glue-api falhou: ${e.message?.slice(0, 50)}`);
@@ -1675,7 +1675,7 @@ async function buscarZapViaProxy(bairro) {
       bairro, tipo: 'residencial', portal: 'ZAP',
       link: `https://www.zapimoveis.com.br${i.link?.href || ''}`,
     }))
-    .filter(i => i.preco > 0 && i.link.length > 30);
+    .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
 }
 
 
@@ -1720,6 +1720,26 @@ async function buscarOLX(bairro, region) {
     ]);
     if (zapDireto.status === 'fulfilled') todos.push(...zapDireto.value);
     if (vivaReal.status === 'fulfilled') todos.push(...vivaReal.value);
+  }
+
+  // Fallback: Scraping Browser (Puppeteer) se ZAP ou VivaReal ainda sem resultado
+  const zapTotal = todos.filter(i => i.portal === 'ZAP').length;
+  const vrTotal  = todos.filter(i => i.portal === 'VivaReal').length;
+  if ((zapTotal === 0 || vrTotal === 0) && process.env.BRIGHTDATA_BROWSER_WS) {
+    console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro}...`);
+    try {
+      const puppeteerResult = await buscarZapEVivaRealPuppeteer(bairro);
+      if (puppeteerResult.zap?.length > 0) {
+        todos.push(...puppeteerResult.zap);
+        console.log(`   ✅ ZAP Puppeteer fallback: ${puppeteerResult.zap.length} imóveis`);
+      }
+      if (puppeteerResult.vivareal?.length > 0) {
+        todos.push(...puppeteerResult.vivareal);
+        console.log(`   ✅ VivaReal Puppeteer fallback: ${puppeteerResult.vivareal.length} imóveis`);
+      }
+    } catch (e) {
+      console.log(`   __ Scraping Browser falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    }
   }
 
   // Apify ZAP dedicado — fallback quando tudo bloqueia
