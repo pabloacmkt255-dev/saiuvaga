@@ -1148,10 +1148,10 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
   const slug = toSlug(bairro);
   const regiaoPrefix = BAIRRO_REGIAO.get(slug);
 
-  const zapUrl = regiaoPrefix
-    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slug}/`
-    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
+  // ZAP: sem região no path (zona-oeste causa "página não encontrada" via Puppeteer)
+  const zapUrl = `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
 
+  // VivaReal: com região no path (funciona corretamente)
   const vrUrl = regiaoPrefix
     ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
     : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
