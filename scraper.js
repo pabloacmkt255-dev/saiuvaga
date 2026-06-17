@@ -24,7 +24,7 @@ const mp = new MercadoPagoConfig({
 // -- Z-API WhatsApp -------------------------------------------
 const ZAPI_INSTANCE    = process.env.ZAPI_INSTANCE;
 const ZAPI_TOKEN       = process.env.ZAPI_TOKEN;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN || ZAPI_TOKEN; // Token de segurança do cliente Z-API
+const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN || ''; // Token de segurança extra (só necessário se ativado no painel Z-API)
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'saiuvaga_webhook_2024';
 
 // -- Robustez: pool de User-Agents (reduz padrão de detecção) ----
@@ -118,7 +118,7 @@ async function enviarWhatsApp(telefone, imovel = null, mensagemLivre = null) {
         {
           headers: {
             'Content-Type': 'application/json',
-            'Client-Token': ZAPI_CLIENT_TOKEN
+            ...(ZAPI_CLIENT_TOKEN ? { 'Client-Token': ZAPI_CLIENT_TOKEN } : {}),
           },
           timeout: 15000,
         }
