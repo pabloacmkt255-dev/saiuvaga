@@ -307,10 +307,20 @@ function pularWpp() {
   showSuccess();
 }
 
-function showSuccess() {
+async function showSuccess() {
   document.getElementById('state-loading').style.display = 'none';
   document.getElementById('state-wpp').style.display = 'none';
   document.getElementById('state-success').style.display = 'block';
+
+  // Salva sessão no sessionStorage para que saiuvaga-alertas.html encontre o usuário
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      sessionStorage.setItem('sv_uid', session.user.id);
+      sessionStorage.setItem('sv_token', session.access_token || '');
+    }
+  } catch(e) { console.warn('Erro ao salvar sessão:', e); }
+
   // Redireciona para configuração de alertas automaticamente
   let seconds = 4;
   const cd = document.getElementById('countdown');
