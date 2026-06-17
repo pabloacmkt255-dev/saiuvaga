@@ -129,38 +129,22 @@ body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;color:
     <span class="wpp-skip" onclick="pularWpp()">Pular por agora →</span>
   </div>
 
-  <!-- Estado: sucesso -->
+  <!-- Estado: sucesso — redireciona para alertas em 4s -->
   <div id="state-success" style="display:none">
     <div class="icon icon-success">✓</div>
     <div class="trial-badge"><div class="pulse-dot"></div>Trial de 7 dias ativado!</div>
-    <div class="title">E-mail confirmado!</div>
-    <div class="sub">Seus 7 dias grátis começaram agora. Configure seus alertas e receba imóveis no WhatsApp em tempo real.</div>
+    <div class="title">Tudo certo! 🎉</div>
+    <div class="sub">Agora configure os bairros e filtros para começar a receber alertas no WhatsApp.</div>
 
     <div class="features">
-      <div class="feature"><div class="feature-dot">🔍</div>Monitoramento de +100 portais em SP</div>
-      <div class="feature"><div class="feature-dot">⚡</div>Alertas em menos de 2 minutos</div>
-      <div class="feature"><div class="feature-dot">📱</div>Notificação direto no WhatsApp</div>
-    </div>
-
-    <div class="wpp-preview">
-      <div class="wpp-bar">
-        <div class="wpp-av">🏠</div>
-        <div class="wpp-name">SaiuVaga</div>
-      </div>
-      <div class="wpp-body">
-        <div class="bubble">
-          <strong>🚨 Nova vaga — Pinheiros!</strong><br>
-          Ap 2q · 55m² · R$1.650/mês<br>
-          🔗 ver imóvel →
-          <div class="bubble-time">agora ✓✓</div>
-        </div>
-      </div>
+      <div class="feature"><div class="feature-dot">1️⃣</div>Escolha os bairros que quer monitorar</div>
+      <div class="feature"><div class="feature-dot">2️⃣</div>Defina o preço máximo e quartos</div>
+      <div class="feature"><div class="feature-dot">3️⃣</div>Receba imóveis no WhatsApp em tempo real</div>
     </div>
 
     <div style="margin-top:24px">
-      <a href="saiuvaga-busca.html" class="btn">Buscar imóveis agora →</a>
-      <br>
-      <a href="saiuvaga-alertas.html" class="btn-outline">Configurar alertas</a>
+      <a href="saiuvaga-alertas.html" class="btn" id="btn-alertas">Configurar alertas agora →</a>
+      <div id="redirect-counter" style="margin-top:12px;font-size:13px;color:#888">Redirecionando em <span id="countdown">4</span>s...</div>
     </div>
   </div>
 
@@ -325,7 +309,19 @@ function pularWpp() {
 
 function showSuccess() {
   document.getElementById('state-loading').style.display = 'none';
+  document.getElementById('state-wpp').style.display = 'none';
   document.getElementById('state-success').style.display = 'block';
+  // Redireciona para configuração de alertas automaticamente
+  let seconds = 4;
+  const cd = document.getElementById('countdown');
+  const timer = setInterval(() => {
+    seconds--;
+    if (cd) cd.textContent = seconds;
+    if (seconds <= 0) {
+      clearInterval(timer);
+      window.location.href = 'saiuvaga-alertas.html';
+    }
+  }, 1000);
 }
 
 function showError(msg) {
