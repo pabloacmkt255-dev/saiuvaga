@@ -408,8 +408,7 @@ async function cadastrar() {
     await sb.auth.signOut();
   }
   setLoading('btn-cadastrar','spin1',false);
-  if (typeof gtag !== 'undefined') { gtag('event','conversion',{'send_to':'AW-18192818213/lead'}); gtag('event','sign_up',{'method':'email'}); }
-  if (typeof fbq !== 'undefined') fbq('track','Lead');
+  if (typeof gtag !== 'undefined') { gtag('event','sign_up',{'method':'email'}); }  // Lead/conversion disparado no confirmado.html após confirmação real
   // Mensagem diferente por plano
   if (planoSelecionado === 'trial') {
     showSuccess('Confirme seu e-mail! 📧', `Enviamos um link para ${email}. Clique nele para ativar seus 7 dias grátis.`);
@@ -459,7 +458,6 @@ async function entrar() {
 
 async function loginGoogle() {
   if (typeof gtag !== 'undefined') gtag('event','sign_up',{'method':'google'});
-  if (typeof fbq !== 'undefined') fbq('track','Lead');
   const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
   if (error) showError('Erro ao conectar com Google: ' + error.message);
 }
