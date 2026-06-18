@@ -829,6 +829,27 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+app.get('/api/admin/stats', async (req, res) => {
+  if (!verificarAdmin(req, res)) return;
+  try {
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const [imoveisRes, imoveisHojeRes, alertasRes, alertasHojeRes] = await Promise.all([
+      supabaseAdmin.from('imoveis').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('imoveis').select('id', { count: 'exact', head: true }).gte('encontrado_em', hoje.toISOString()),
+      supabaseAdmin.from('alertas').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('alertas').select('id', { count: 'exact', head: true }).gte('created_at', hoje.toISOString()),
+    ]);
+    res.json({
+      imoveis: imoveisRes.count || 0,
+      imoveis_hoje: imoveisHojeRes.count || 0,
+      alertas: alertasRes.count || 0,
+      alertas_hoje: alertasHojeRes.count || 0,
+    });
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+
 app.get('/api/admin/payments', async (req, res) => {
   if (!verificarAdmin(req, res)) return;
   try {
