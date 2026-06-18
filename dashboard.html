@@ -139,6 +139,9 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
       <div class="metric" style="--accent:#ef4444"><div class="metric-label">Trial expirado</div><div class="metric-value" id="m-expirados">—</div><div class="metric-sub">aguardando pagamento</div></div>
       <div class="metric" style="--accent:#1D9E75"><div class="metric-label">MRR estimado</div><div class="metric-value" id="m-mrr">—</div><div class="metric-sub">receita mensal recorrente</div></div>
       <div class="metric" style="--accent:#a855f7"><div class="metric-label">Cadastros hoje</div><div class="metric-value" id="m-hoje">—</div><div class="metric-sub" id="m-semana">— esta semana</div></div>
+      <div class="metric" style="--accent:#06b6d4"><div class="metric-label">Imóveis no banco</div><div class="metric-value" id="m-imoveis">—</div><div class="metric-sub" id="m-imoveis-sub">OLX + VivaReal + ZAP</div></div>
+      <div class="metric" style="--accent:#10b981"><div class="metric-label">Alertas enviados</div><div class="metric-value" id="m-alertas">—</div><div class="metric-sub" id="m-alertas-sub">total histórico</div></div>
+      <div class="metric" style="--accent:#8b5cf6"><div class="metric-label">Com alertas ativos</div><div class="metric-value" id="m-com-alerta">—</div><div class="metric-sub">usuários configurados</div></div>
     </div>
 
     <div class="grid3">
@@ -227,7 +230,26 @@ function startClock() {
 function showError(msg) { const el = document.getElementById('error-banner'); el.textContent = '⚠ ' + msg; el.style.display = 'block'; }
 function hideError() { document.getElementById('error-banner').style.display = 'none'; }
 
-async function loadAll() { hideError(); await Promise.all([loadUsers(), loadPayments()]); }
+async function loadAll() { hideError(); await Promise.all([loadUsers(), loadPayments(), loadStats()]); }
+
+async function loadStats() {
+  try {
+    // Busca contagem de imóveis e alertas via admin health
+    const res = await fetch(`${API}/api/admin/stats`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.imoveis !== undefined) {
+      document.getElementById('m-imoveis').textContent = data.imoveis.toLocaleString('pt-BR');
+      document.getElementById('m-imoveis-sub').textContent = `${data.imoveis_hoje || 0} novos hoje`;
+    }
+    if (data.alertas !== undefined) {
+      document.getElementById('m-alertas').textContent = data.alertas.toLocaleString('pt-BR');
+      document.getElementById('m-alertas-sub').textContent = `${data.alertas_hoje || 0} hoje`;
+    }
+  } catch(e) {}
+}
 
 async function loadUsers() {
   try {
@@ -265,6 +287,8 @@ function renderMetrics(users) {
   document.getElementById('m-mrr').textContent = `R$${mrr.toFixed(0)}`;
   document.getElementById('m-hoje').textContent = cadastrosHoje;
   document.getElementById('m-semana').textContent = `${cadastrosSemana} esta semana`;
+  const comAlerta = users.filter(u => u.alerta_bairros && u.alerta_bairros.length > 0).length;
+  document.getElementById('m-com-alerta').textContent = comAlerta;
 }
 
 function renderChart(users) {
