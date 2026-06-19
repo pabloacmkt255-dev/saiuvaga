@@ -292,7 +292,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
   if (loginManualEmAndamento) return;
   // Só age em login explícito (aba "Já tenho conta") com e-mail confirmado
   // Novos cadastros são tratados pelo confirmado.html após clique no link
-  if (event === 'SIGNED_IN' && session?.user && !loginManualEmAndamento) {
+  if (event === 'SIGNED_IN' && session?.user) {
     const user = session.user;
     const { data: existe } = await sb.from('users').select('id, trial_usado, ativo, plano').eq('id', user.id).maybeSingle();
     if (!existe) return;
@@ -379,7 +379,7 @@ async function cadastrar() {
   setLoading('btn-cadastrar','spin1',true); hideError();
   let data, error;
   try {
-    const res = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome } } });
+    const res = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: nome }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
     data = res.data; error = res.error;
   } catch(e) {
     setLoading('btn-cadastrar','spin1',false);
@@ -404,14 +404,13 @@ async function cadastrar() {
   }
   if (data.user) {
     await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
-    // Ativa trial direto — sem verificação de email
-    const token = data.session?.access_token || '';
+    const token = data.session && data.session.access_token ? data.session.access_token : '';
     if (planoSelecionado === 'trial' && token) {
       try {
         await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${token}\` },
-          body: JSON.stringify({ user_id: data.user.id, email }),
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ user_id: data.user.id, email: email }),
         });
       } catch(e) { console.warn('Erro ao ativar trial:', e); }
     }
@@ -423,12 +422,12 @@ async function cadastrar() {
     if (typeof fbq !== 'undefined') { fbq('track', 'Lead'); fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19}); }
     showSuccess('Conta criada! 🎉', 'Seus 7 dias grátis começaram agora. Configure seus alertas e receba imóveis no WhatsApp em tempo real.');
     document.querySelector('.wapp-preview').style.display = 'block';
-    setTimeout(() => { window.location.href = 'saiuvaga-alertas.html'; }, 3000);
+    setTimeout(function() { window.location.href = 'saiuvaga-alertas.html'; }, 3000);
   } else {
     const nomePlano = planoSelecionado === 'trimestral' ? 'Trimestral (R$38)' : 'Mensal (R$19)';
-    showSuccess('Conta criada! ✓', `Redirecionando para o pagamento do Plano ${nomePlano}...`);
+    showSuccess('Conta criada! ✓', 'Redirecionando para o pagamento do Plano ' + nomePlano + '...');
     document.querySelector('.wapp-preview').style.display = 'none';
-    setTimeout(() => { window.location.href = 'saiuvaga-pagamento.html'; }, 2000);
+    setTimeout(function() { window.location.href = 'saiuvaga-pagamento.html'; }, 2000);
   }
 }
 
