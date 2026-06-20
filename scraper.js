@@ -458,6 +458,90 @@ app.post('/api/trial/ativar', async (req, res) => {
   }
 });
 
+// -- Completar cadastro (cria perfil + ativa trial via service_role) --------
+// FIX (19/06): sb.auth.signUp() no frontend cria o usuario em auth.users
+// mas NAO retorna sessao ativa quando a conta fica "pendente de confirmacao"
+// de email (mesmo com a config de "Confirm email" aparentemente desativada).
+// Sem sessao/token, o RLS bloqueava o upsert que o frontend tentava fazer
+// direto na tabela publica `users` -> zero cadastros completando, mesmo com
+// trafego normal de anuncios. Esta rota usa SUPABASE_SERVICE_KEY (ignora RLS)
+// para criar o perfil e ativar o trial, sem depender de sessao do usuario.
+app.post('/api/cadastro/completar', async (req, res) => {
+  try {
+    const { user_id, email, nome, whatsapp, plano } = req.body;
+
+    if (!user_id || !email) {
+      return res.status(400).json({ erro: 'user_id e email sao obrigatorios' });
+    }
+
+    // Confirma que o user_id realmente existe em auth.users (evita lixo na tabela)
+    const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(user_id);
+    if (authErr || !authUser?.user) {
+      return res.status(404).json({ erro: 'Usuario nao encontrado no Auth' });
+    }
+    if (authUser.user.email !== email) {
+      return res.status(403).json({ erro: 'Email nao corresponde ao user_id' });
+    }
+
+    // Ja existe? (evita duplicar trial em re-tentativas)
+    const { data: existente } = await supabase
+      .from('users')
+      .select('id, ativo, trial_usado, plano_validade')
+      .eq('id', user_id)
+      .maybeSingle();
+
+    const planoEscolhido = plano || 'trial';
+    const ehTrial = planoEscolhido === 'trial';
+
+    if (existente) {
+      if (ehTrial && !existente.trial_usado && !existente.ativo) {
+        const validade = new Date();
+        validade.setDate(validade.getDate() + 7);
+        await supabase.from('users').update({
+          ativo: true,
+          trial_usado: true,
+          plano_validade: validade.toISOString(),
+          plano: 'trial',
+        }).eq('id', user_id);
+        console.log(`   🎁 [cadastro/completar] Trial ativado (registro ja existia) para ${email}`);
+        return res.json({ ok: true, ja_existia: true, trial_ativado: true, validade: validade.toISOString() });
+      }
+      return res.json({ ok: true, ja_existia: true, trial_ativado: existente.ativo || false });
+    }
+
+    const validade = new Date();
+    if (ehTrial) validade.setDate(validade.getDate() + 7);
+
+    const { error: insertErr } = await supabase.from('users').insert({
+      id: user_id,
+      email,
+      nome: nome || null,
+      whatsapp: whatsapp ? whatsapp.replace(/\D/g, '') : null,
+      plano: planoEscolhido,
+      ativo: ehTrial,
+      trial_usado: ehTrial,
+      plano_validade: ehTrial ? validade.toISOString() : null,
+    });
+
+    if (insertErr) {
+      console.error('❌ [cadastro/completar] Erro ao inserir em users:', insertErr.message);
+      return res.status(500).json({ erro: 'Falha ao criar perfil: ' + insertErr.message });
+    }
+
+    console.log(`   ✅ [cadastro/completar] Perfil criado para ${email} | plano=${planoEscolhido} | trial_ativo=${ehTrial}`);
+    res.json({
+      ok: true,
+      ja_existia: false,
+      trial_ativado: ehTrial,
+      validade: ehTrial ? validade.toISOString() : null,
+    });
+
+  } catch (err) {
+    console.error('❌ [cadastro/completar] Erro geral:', err.message);
+    res.status(500).json({ erro: err.message });
+  }
+});
+
 // -- Verificar status do usuario -----------------------------
 // -- Salvar/buscar alerta do usuário (usa service key, passa RLS) -------------
 app.post('/api/usuario/alerta', async (req, res) => {
