@@ -57,6 +57,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .field label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--ink3); margin-bottom: 6px; }
 .field input, .field select { width: 100%; height: 48px; border: 1.5px solid var(--ln); border-radius: var(--r); padding: 0 14px; font-size: 14px; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); outline: none; transition: all .2s; appearance: none; }
 .field input:focus, .field select:focus { border-color: var(--g); background: var(--wh); box-shadow: 0 0 0 3px rgba(29,158,117,.1); }
+.field input.field-err { border-color: #B91C1C; background: #FEF2F2; }
 
 /* PLANOS — 3 cards em grid */
 .plan-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
@@ -97,6 +98,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .bubble-time { font-size: 9px; color: #999; text-align: right; margin-top: 3px; }
 .error-msg { display: none; font-size: 13px; color: #B91C1C; background: #FEE2E2; border-radius: var(--r); padding: 10px 14px; margin-bottom: 14px; }
 .error-msg.success-msg { color: #0F6E56; background: #E1F5EE; }
+.error-msg.warn-msg { color: #92400E; background: #FEF3C7; }
 .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 768px) {
@@ -351,10 +353,19 @@ function setLoading(btnId, spinId, loading) {
   }
 }
 
-function showError(msg, tipo='erro') {
+// FIX: agora rola a tela até a mensagem de erro e dá destaque visual no campo problemático.
+// Antes, em mobile com o formulário scrollado, o erro aparecia fora da área visível e
+// parecia que "nada aconteceu" ao clicar no botão.
+function showError(msg, tipo='erro', campoId=null) {
   const el = document.getElementById('error-msg');
   el.textContent = msg; el.style.display = 'block';
-  el.className = 'error-msg' + (tipo === 'ok' ? ' success-msg' : '');
+  el.className = 'error-msg' + (tipo === 'ok' ? ' success-msg' : tipo === 'warn' ? ' warn-msg' : '');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.querySelectorAll('.field input.field-err').forEach(i => i.classList.remove('field-err'));
+  if (campoId) {
+    const campo = document.getElementById(campoId);
+    if (campo) { campo.classList.add('field-err'); campo.focus({ preventScroll: true }); }
+  }
 }
 
 function hideError() { document.getElementById('error-msg').style.display = 'none'; }
@@ -364,6 +375,31 @@ function showSuccess(title, sub) {
   document.getElementById('success-view').style.display = 'block';
   document.getElementById('suc-title').textContent = title;
   document.getElementById('suc-sub').textContent = sub;
+  document.getElementById('success-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// FIX: helper de fetch com timeout + 1 retry automático.
+// Antes, uma falha de rede/cold-start no Railway era engolida silenciosamente (catch só dava console.warn)
+// e o usuário via "Conta criada! 🎉" mesmo quando o trial NÃO tinha sido ativado no banco.
+async function fetchComRetry(url, options, tentativas = 2, timeoutMs = 8000) {
+  let ultimoErro;
+  for (let i = 0; i < tentativas; i++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        ultimoErro = new Error('HTTP ' + res.status);
+        continue; // tenta de novo se ainda houver tentativa
+      }
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      ultimoErro = e;
+    }
+  }
+  throw ultimoErro;
 }
 
 async function cadastrar() {
@@ -372,10 +408,11 @@ async function cadastrar() {
   const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
   const pass  = (document.getElementById('reg-pass')?.value || '');
 
-  if (!nome) { showError('Preencha o nome completo.'); document.getElementById('reg-nome').focus(); return; }
-  if (!email) { showError('Preencha o e-mail.'); document.getElementById('reg-email').focus(); return; }
-  if (!wpp) { showError('Preencha o WhatsApp.'); document.getElementById('reg-wpp').focus(); return; }
-  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.'); document.getElementById('reg-pass').focus(); return; }
+  if (!nome) { showError('Preencha o nome completo.', 'erro', 'reg-nome'); return; }
+  if (!email) { showError('Preencha o e-mail.', 'erro', 'reg-email'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Digite um e-mail válido.', 'erro', 'reg-email'); return; }
+  if (!wpp || wpp.replace(/\D/g,'').length < 10) { showError('Preencha um WhatsApp válido com DDD.', 'erro', 'reg-wpp'); return; }
+  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.', 'erro', 'reg-pass'); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
   let data, error;
   try {
@@ -403,31 +440,68 @@ async function cadastrar() {
     return;
   }
   if (data.user) {
-    await sb.from('users').upsert({ id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado, ativo: false, trial_usado: false }, { onConflict: 'id' });
-    const token = data.session && data.session.access_token ? data.session.access_token : '';
-    if (planoSelecionado === 'trial' && token) {
-      try {
-        await fetch('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ user_id: data.user.id, email: email }),
-        });
-      } catch(e) { console.warn('Erro ao ativar trial:', e); }
+    // FIX (19/06): trocado upsert direto do frontend (bloqueado por RLS quando
+    // o signUp() não retorna sessão ativa — caso de "email não confirmado")
+    // pela rota de backend /api/cadastro/completar, que usa service_role e
+    // portanto cria o perfil e ativa o trial independente de haver sessão.
+    // Isso resolve a causa raiz: usuário existia em auth.users mas nunca
+    // aparecia em public.users, mesmo com signUp() retornando sucesso.
+    try {
+      const res = await fetchComRetry('https://saiuvaga-production.up.railway.app/api/cadastro/completar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: data.user.id,
+          email,
+          nome,
+          whatsapp: wpp.replace(/\D/g,''),
+          plano: planoSelecionado,
+        }),
+      });
+      const resultado = await res.json();
+      if (!resultado.ok) throw new Error(resultado.erro || 'Falha ao completar cadastro');
+    } catch(e) {
+      console.error('Erro ao completar cadastro (após retry):', e);
+      setLoading('btn-cadastrar','spin1',false);
+      showError('Conta criada, mas houve um problema ao finalizar seu cadastro. Tentando novamente em instantes — se persistir, fale com a gente no WhatsApp.', 'warn');
+      // Tenta mais uma vez sozinho após 3s antes de jogar a responsabilidade pro usuário
+      setTimeout(async () => {
+        try {
+          const res2 = await fetchComRetry('https://saiuvaga-production.up.railway.app/api/cadastro/completar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado }),
+          }, 1);
+          const resultado2 = await res2.json();
+          if (!resultado2.ok) throw new Error(resultado2.erro || 'Falha ao completar cadastro');
+          finalizarCadastroTrial();
+        } catch (e2) {
+          console.error('Segunda tentativa de completar cadastro também falhou:', e2);
+          showError('Não conseguimos finalizar seu cadastro automaticamente. Toque aqui para falar com o suporte no WhatsApp.', 'warn');
+          document.getElementById('error-msg').style.cursor = 'pointer';
+          document.getElementById('error-msg').onclick = () => window.open('https://wa.me/5511984207437?text=Ol%C3%A1%2C%20criei%20conta%20mas%20meu%20cadastro%20n%C3%A3o%20finalizou.%20Email%3A%20' + encodeURIComponent(email), '_blank');
+        }
+      }, 3000);
+      return;
     }
   }
-  setLoading('btn-cadastrar','spin1',false);
-  if (typeof gtag !== 'undefined') { gtag('event','sign_up',{'method':'email'}); }  // Lead/conversion disparado no confirmado.html após confirmação real
-  // Mensagem diferente por plano
-  if (planoSelecionado === 'trial') {
-    if (typeof fbq !== 'undefined') { fbq('track', 'Lead'); fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19}); }
-    showSuccess('Conta criada! 🎉', 'Seus 7 dias grátis começaram agora. Configure seus alertas e receba imóveis no WhatsApp em tempo real.');
-    document.querySelector('.wapp-preview').style.display = 'block';
-    setTimeout(function() { window.location.href = 'saiuvaga-alertas.html'; }, 3000);
-  } else {
-    const nomePlano = planoSelecionado === 'trimestral' ? 'Trimestral (R$38)' : 'Mensal (R$19)';
-    showSuccess('Conta criada! ✓', 'Redirecionando para o pagamento do Plano ' + nomePlano + '...');
-    document.querySelector('.wapp-preview').style.display = 'none';
-    setTimeout(function() { window.location.href = 'saiuvaga-pagamento.html'; }, 2000);
+  finalizarCadastroTrial();
+
+  function finalizarCadastroTrial() {
+    setLoading('btn-cadastrar','spin1',false);
+    if (typeof gtag !== 'undefined') { gtag('event','sign_up',{'method':'email'}); }  // Lead/conversion disparado no confirmado.html após confirmação real
+    // Mensagem diferente por plano
+    if (planoSelecionado === 'trial') {
+      if (typeof fbq !== 'undefined') { fbq('track', 'Lead'); fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19}); }
+      showSuccess('Conta criada! 🎉', 'Seus 7 dias grátis começaram agora. Configure seus alertas e receba imóveis no WhatsApp em tempo real.');
+      const wp = document.querySelector('.wapp-preview'); if (wp) wp.style.display = 'block';
+      setTimeout(function() { window.location.href = 'saiuvaga-alertas.html'; }, 3000);
+    } else {
+      const nomePlano = planoSelecionado === 'trimestral' ? 'Trimestral (R$38)' : 'Mensal (R$19)';
+      showSuccess('Conta criada! ✓', 'Redirecionando para o pagamento do Plano ' + nomePlano + '...');
+      const wp = document.querySelector('.wapp-preview'); if (wp) wp.style.display = 'none';
+      setTimeout(function() { window.location.href = 'saiuvaga-pagamento.html'; }, 2000);
+    }
   }
 }
 
@@ -458,8 +532,27 @@ async function entrar() {
       showSuccess('Login feito! ✓', 'Seu trial expirou. Redirecionando para planos...');
       setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
     } else {
-      showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas.');
-      setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
+      // FIX: usuário caiu aqui (trial_usado=false, ativo=false) por causa do bug de ativação
+      // silenciosa antiga. Em vez de mandar direto pro pagamento (que não faz sentido pra quem
+      // só queria o trial grátis), tenta ativar o trial agora via login antes de decidir pra onde ir.
+      try {
+        const tokenLogin = data.session && data.session.access_token ? data.session.access_token : '';
+        if (tokenLogin) {
+          await fetchComRetry('https://saiuvaga-production.up.railway.app/api/trial/ativar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokenLogin },
+            body: JSON.stringify({ user_id: data.user.id, email: email }),
+          }, 1);
+          showSuccess('Trial ativado! 🎉', 'Seus 7 dias grátis começaram agora. Redirecionando...');
+          setTimeout(() => window.location.href = 'saiuvaga-alertas.html', 1500);
+        } else {
+          showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas.');
+          setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
+        }
+      } catch (e3) {
+        showSuccess('Login feito! ✓', 'Ative seu plano para começar a receber alertas.');
+        setTimeout(() => window.location.href = 'saiuvaga-pagamento.html', 1000);
+      }
     }
   } catch(e) {
     // Fallback: vai para busca e deixa o paywall decidir
