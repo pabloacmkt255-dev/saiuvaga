@@ -184,6 +184,7 @@ body {
 }
 .field-hint { font-size: 12px; color: var(--ink3); margin-top: 6px; line-height: 1.5; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field input.field-err { border-color: #B91C1C; background: #FEF2F2; }
 
 /* ── Bairros chips ─────────────────────────────────────────── */
 .bairros-input-wrap {
@@ -451,6 +452,24 @@ body {
       <div class="page-sub">Configure exatamente o que você busca. A gente avisa no WhatsApp em menos de 2 minutos quando surgir uma vaga.</div>
     </div>
 
+    <!-- Card: WhatsApp -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📲</div>
+        <div>
+          <div class="card-title">Seu WhatsApp</div>
+          <div class="card-desc">É para esse número que enviamos os alertas em tempo real</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field" style="margin-bottom:0">
+          <label>Número com DDD</label>
+          <input type="tel" id="whatsapp-input" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel">
+          <div class="field-hint">Sem o WhatsApp cadastrado, os alertas não podem ser enviados.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Card: Bairros -->
     <div class="card">
       <div class="card-header">
@@ -478,7 +497,7 @@ body {
           <div class="chips" id="chips-container">
             <span class="chips-empty" id="chips-empty">Nenhum bairro selecionado. Adicione pelo menos um.</span>
           </div>
-          <!-- Atalhos de bairros populares — some quando usuário já tem bairros -->
+          <!-- Atalhos de bairros populares — some quando usuário já tem bairros configurados -->
           <div id="quick-bairros" style="margin-top:10px">
             <div style="font-size:11px;color:var(--ink3);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Bairros populares</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -628,7 +647,7 @@ let userId = null;
 
 // ── Auth ─────────────────────────────────────────────────────
 async function init() {
-  // Tenta sessionStorage primeiro (salvo pela busca ao fazer login)
+  // Tenta sessionStorage primeiro (salvo pelo cadastro ou login)
   let uid = sessionStorage.getItem('sv_uid');
 
   if (!uid) {
@@ -651,8 +670,9 @@ async function init() {
   }
 
   if (!uid) {
-    // Sem sessão — redireciona para busca (que faz login)
-    window.location.href = 'saiuvaga-busca.html';
+    // Sem sessão — mostra muro de autenticação em vez de tentar adivinhar destino
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('auth-wall').style.display = 'block';
     return;
   }
 
@@ -682,75 +702,103 @@ async function carregarDados(uid) {
     statusTrialUsado = status.trial_usado || false;
   } catch(e) { console.warn('status API falhou:', e); }
 
-  const { data: user } = await sb
-    .from('users')
-    .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max')
-    .eq('id', uid)
-    .maybeSingle();
+  let user = null;
+  try {
+    const { data: userData } = await sb
+      .from('users')
+      .select('ativo, plano, plano_validade, trial_usado, whatsapp, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_silencio_inicio, alerta_silencio_fim, alerta_freq_max')
+      .eq('id', uid)
+      .maybeSingle();
+    user = userData;
+  } catch(e) { /* segue com fallback abaixo, sem travar a página */ }
 
-  if (user) {
-    // Status bar — usa dados do backend (confiáveis) para status, Supabase para preferências
-    const agora = new Date();
-    const validade = user.plano_validade ? new Date(user.plano_validade) : null;
-    const ativo = statusAtivo || !!(user.ativo && validade && validade > agora);
-
-    const badge = document.getElementById('status-badge');
-    const diasEl = document.getElementById('status-dias');
-    const upgradeEl = document.getElementById('upgrade-link');
-
-    const diasRestantes = statusDias || (validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0);
-    const planoAtual = statusPlano || user.plano;
-    if (ativo && planoAtual === 'trial') {
-      badge.textContent = '🎁 Trial ativo';
-      badge.className = 'status-badge ativo';
-      diasEl.textContent = `${diasRestantes} dias restantes`;
-      upgradeEl.style.display = 'inline';
-      upgradeEl.textContent = 'Ver planos pagos →';
-    } else if (ativo) {
-      badge.textContent = `✅ Plano ${user.plano}`;
-      badge.className = 'status-badge ativo';
-      diasEl.textContent = `Válido por mais ${diasRestantes} dias`;
-    } else if (user.trial_usado) {
-      badge.textContent = '⏰ Trial expirado';
-      badge.className = 'status-badge expirado';
-      diasEl.textContent = 'Assine para continuar recebendo alertas';
-      upgradeEl.style.display = 'inline';
-      upgradeEl.textContent = 'Assinar agora →';
-    } else {
-      badge.textContent = 'Sem plano ativo';
-      badge.className = 'status-badge inativo';
-      upgradeEl.style.display = 'inline';
-    }
-
-    // Bairros
-    bairros = Array.isArray(user.alerta_bairros) ? [...user.alerta_bairros] : [];
-    // Esconde atalhos se já tem bairros configurados
-    if (bairros.length > 0) {
-      const qb = document.getElementById('quick-bairros');
-      if (qb) qb.style.display = 'none';
-    }
-    renderChips();
-
-    // Filtros
-    if (user.alerta_preco_max) document.getElementById('preco-max').value = user.alerta_preco_max;
-    if (user.alerta_quartos_min) document.getElementById('quartos-min').value = user.alerta_quartos_min;
-    if (user.alerta_area_min) document.getElementById('area-min').value = user.alerta_area_min;
-    if (user.alerta_freq_max) document.getElementById('freq-max').value = user.alerta_freq_max;
-
-    // Silêncio
-    const temSilencio = user.alerta_silencio_inicio != null && user.alerta_silencio_fim != null;
-    if (temSilencio) {
-      document.getElementById('silencio-toggle').checked = true;
-      toggleSilencio(true);
-      document.getElementById('silencio-inicio').value = user.alerta_silencio_inicio;
-      document.getElementById('silencio-fim').value = user.alerta_silencio_fim;
-    }
-
-    atualizarPreview();
+  if (!user) {
+    // Sem sessão real (cadastro via /api/cadastro/completar), RLS bloqueou
+    // a leitura direta — usa só os dados de status já obtidos via backend.
+    user = { ativo: statusAtivo, plano: statusPlano, plano_validade: null, trial_usado: statusTrialUsado, whatsapp: null, alerta_bairros: [] };
   }
+
+  // Status bar — usa dados do backend (confiáveis) para status, Supabase para preferências
+  const agora = new Date();
+  const validade = user.plano_validade ? new Date(user.plano_validade) : null;
+  const ativo = statusAtivo || !!(user.ativo && validade && validade > agora);
+
+  const badge = document.getElementById('status-badge');
+  const diasEl = document.getElementById('status-dias');
+  const upgradeEl = document.getElementById('upgrade-link');
+
+  const diasRestantes = statusDias || (validade ? Math.max(0, Math.ceil((validade - agora) / (1000*60*60*24))) : 0);
+  const planoAtual = statusPlano || user.plano;
+  if (ativo && planoAtual === 'trial') {
+    badge.textContent = '🎁 Trial ativo';
+    badge.className = 'status-badge ativo';
+    diasEl.textContent = `${diasRestantes} dias restantes`;
+    upgradeEl.style.display = 'inline';
+    upgradeEl.textContent = 'Ver planos pagos →';
+  } else if (ativo) {
+    badge.textContent = `✅ Plano ${user.plano}`;
+    badge.className = 'status-badge ativo';
+    diasEl.textContent = `Válido por mais ${diasRestantes} dias`;
+  } else if (user.trial_usado) {
+    badge.textContent = '⏰ Trial expirado';
+    badge.className = 'status-badge expirado';
+    diasEl.textContent = 'Assine para continuar recebendo alertas';
+    upgradeEl.style.display = 'inline';
+    upgradeEl.textContent = 'Assinar agora →';
+  } else {
+    badge.textContent = 'Sem plano ativo';
+    badge.className = 'status-badge inativo';
+    upgradeEl.style.display = 'inline';
+  }
+
+  // WhatsApp
+  if (user.whatsapp) {
+    document.getElementById('whatsapp-input').value = formatarFoneExibicao(user.whatsapp);
+  }
+
+  // Bairros
+  bairros = Array.isArray(user.alerta_bairros) ? [...user.alerta_bairros] : [];
+  // Esconde atalhos se já tem bairros configurados
+  if (bairros.length > 0) {
+    const qb = document.getElementById('quick-bairros');
+    if (qb) qb.style.display = 'none';
+  }
+  renderChips();
+
+  // Filtros
+  if (user.alerta_preco_max) document.getElementById('preco-max').value = user.alerta_preco_max;
+  if (user.alerta_quartos_min) document.getElementById('quartos-min').value = user.alerta_quartos_min;
+  if (user.alerta_area_min) document.getElementById('area-min').value = user.alerta_area_min;
+  if (user.alerta_freq_max) document.getElementById('freq-max').value = user.alerta_freq_max;
+
+  // Silêncio
+  const temSilencio = user.alerta_silencio_inicio != null && user.alerta_silencio_fim != null;
+  if (temSilencio) {
+    document.getElementById('silencio-toggle').checked = true;
+    toggleSilencio(true);
+    document.getElementById('silencio-inicio').value = user.alerta_silencio_inicio;
+    document.getElementById('silencio-fim').value = user.alerta_silencio_fim;
+  }
+
+  atualizarPreview();
 
   document.getElementById('loading-overlay').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
+}
+
+function formatarFoneExibicao(digits) {
+  const v = String(digits).replace(/\D/g,'').replace(/^55/, '').slice(0,11);
+  if (v.length > 6) return v.replace(/^(\d{2})(\d{5})(\d{0,4})/,'($1) $2-$3');
+  if (v.length > 2) return v.replace(/^(\d{2})(\d{0,5})/,'($1) $2');
+  return v;
+}
+
+// ── WhatsApp ─────────────────────────────────────────────────
+function mascaraFone(el) {
+  let v = el.value.replace(/\D/g,'').slice(0,11);
+  if (v.length > 6) v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/,'($1) $2-$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/,'($1) $2');
+  el.value = v;
 }
 
 // ── Bairros ──────────────────────────────────────────────────
@@ -839,6 +887,19 @@ function adicionarBairroRapido(nome) {
 
 async function salvarAlertas() {
   if (!userId) return;
+
+  // FIX (20/06): WhatsApp deixou de ser coletado no cadastro (formulário
+  // simplificado para reduzir fricção) — agora é obrigatório aqui, já que
+  // sem ele os alertas nunca chegariam a lugar nenhum.
+  const whatsapp = (document.getElementById('whatsapp-input')?.value || '').trim();
+  if (!whatsapp || whatsapp.replace(/\D/g,'').length < 10) {
+    showToast('Preencha um WhatsApp válido com DDD antes de salvar.', 'error');
+    const el = document.getElementById('whatsapp-input');
+    el.classList.add('field-err');
+    el.focus();
+    return;
+  }
+
   if (bairros.length === 0) {
     showToast('Adicione pelo menos um bairro antes de salvar.', 'error');
     return;
@@ -856,13 +917,14 @@ async function salvarAlertas() {
   const silencioFim    = silencioOn ? parseInt(document.getElementById('silencio-fim').value)    || null : null;
 
   const payload = {
-    alerta_bairros:         bairros,
-    alerta_preco_max:       parseInt(document.getElementById('preco-max').value) || null,
-    alerta_quartos_min:     parseInt(document.getElementById('quartos-min').value) || 0,
-    alerta_area_min:        parseInt(document.getElementById('area-min').value) || 0,
-    alerta_freq_max:        document.getElementById('freq-max').value,
-    alerta_silencio_inicio: silencioInicio,
-    alerta_silencio_fim:    silencioFim,
+    whatsapp:                whatsapp.replace(/\D/g, ''),
+    alerta_bairros:          bairros,
+    alerta_preco_max:        parseInt(document.getElementById('preco-max').value) || null,
+    alerta_quartos_min:      parseInt(document.getElementById('quartos-min').value) || 0,
+    alerta_area_min:         parseInt(document.getElementById('area-min').value) || 0,
+    alerta_freq_max:         document.getElementById('freq-max').value,
+    alerta_silencio_inicio:  silencioInicio,
+    alerta_silencio_fim:     silencioFim,
   };
 
   try {
@@ -877,6 +939,7 @@ async function salvarAlertas() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.erro || 'Erro ao salvar');
+    document.getElementById('whatsapp-input').classList.remove('field-err');
     showToast('Alertas salvos! Você será avisado assim que surgir uma vaga. 🏠', 'success');
   } catch (e) {
     showToast('Erro ao salvar: ' + e.message, 'error');
@@ -889,7 +952,9 @@ async function salvarAlertas() {
 
 // ── Logout ───────────────────────────────────────────────────
 async function logout() {
-  await sb.auth.signOut();
+  sessionStorage.removeItem('sv_uid');
+  sessionStorage.removeItem('sv_token');
+  try { await sb.auth.signOut(); } catch(e) {}
   window.location.href = 'saiuvaga-cadastro.html';
 }
 
