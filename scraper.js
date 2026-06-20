@@ -932,8 +932,38 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+// -- Excluir usuario (dashboard admin) -------------------------------------
+// Remove de public.users E de auth.users (exclusao definitiva, sem volta).
+// Usado para limpar contas de teste/indesejadas direto pelo dashboard.
+app.delete('/api/admin/users/:id', async (req, res) => {
+  if (!verificarAdmin(req, res)) return;
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ erro: 'id obrigatorio' });
+
+    // Remove primeiro da tabela publica (preferencias, alertas etc vinculados por id)
+    const { error: dbErr } = await supabaseAdmin.from('users').delete().eq('id', id);
+    if (dbErr) return res.status(500).json({ erro: 'Falha ao remover de users: ' + dbErr.message });
+
+    // Remove tambem do Auth, senao o e-mail fica "preso" e a pessoa nao
+    // consegue se cadastrar de novo com o mesmo e-mail depois.
+    const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (authErr) {
+      // Nao falha a requisicao inteira por isso — o registro em users ja foi
+      // removido, que e o que aparece no dashboard. So avisa no log.
+      console.warn(`⚠️  Usuario removido de public.users mas falhou ao remover de auth.users (${id}): ${authErr.message}`);
+    }
+
+    console.log(`   🗑️  Usuario excluido via dashboard: ${id}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ erro: e.message });
+  }
+});
+
 app.get('/api/admin/stats', async (req, res) => {
   if (!verificarAdmin(req, res)) return;
+
   try {
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     const [imoveisRes, imoveisHojeRes, alertasRes, alertasHojeRes] = await Promise.all([
