@@ -558,11 +558,14 @@ app.post('/api/usuario/alerta', async (req, res) => {
     // poderia reescrever os bairros dela — aceitável aqui pois não expõe
     // dados sensíveis (sem leitura, só sobrescreve preferências de busca).
     const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+    console.log(`   🔍 [DIAGNOSTICO alerta] header_raw=${JSON.stringify(req.headers['authorization'])} token_extraido=${JSON.stringify(token)} tem_token=${!!token} user_id=${user_id}`);
     if (token) {
       const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
+      console.log(`   🔍 [DIAGNOSTICO alerta] caminho=COM_TOKEN authErr=${authErr?.message || 'nenhum'} sessionUser_id=${sessionUser?.id || 'nenhum'}`);
       if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
     } else {
       const { data: existeUsuario } = await supabase.from('users').select('id').eq('id', user_id).maybeSingle();
+      console.log(`   🔍 [DIAGNOSTICO alerta] caminho=SEM_TOKEN existeUsuario=${!!existeUsuario}`);
       if (!existeUsuario) return res.status(404).json({ erro: 'Usuario nao encontrado' });
     }
 
