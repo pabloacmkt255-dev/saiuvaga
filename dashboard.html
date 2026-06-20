@@ -155,7 +155,7 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
     </div>
     <div class="panel" style="margin-bottom:24px">
       <div class="panel-header"><div class="panel-title">Todos os usuários</div><div class="panel-count" id="users-count">—</div></div>
-      <div class="search-bar"><input type="text" class="search-input" id="search" name="dashboard-user-filter" placeholder="Buscar por nome, e-mail ou WhatsApp..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="filterUsers()"></div>
+      <div class="search-bar"><input type="search" class="search-input" id="search" name="q_8f3k2" placeholder="Buscar por nome, e-mail ou WhatsApp..." autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" oninput="filterUsers()"></div>
       <div class="filter-row">
         <button class="filter-btn active" onclick="setFilter('todos',this)">Todos</button>
         <button class="filter-btn" onclick="setFilter('novos',this)">Novos (24h)</button>
@@ -203,6 +203,9 @@ async function unlock() {
       adminToken = pass;
       document.getElementById('lock-screen').style.display = 'none';
       document.getElementById('app').style.display = 'block';
+      // Garante campo de busca vazio mesmo se o navegador tentar autopreencher
+      const searchEl = document.getElementById('search');
+      if (searchEl) searchEl.value = '';
       loadAll(); startClock();
     } else {
       document.getElementById('lock-error').style.display = 'block';
