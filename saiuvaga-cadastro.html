@@ -193,35 +193,14 @@ input:-webkit-autofill:focus {
       <div id="view-cadastrar">
         <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo" autocomplete="name"></div>
         <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
-        <div class="field"><label>WhatsApp <span style="text-transform:none;font-weight:400;letter-spacing:0">(para receber os alertas)</span></label><input type="tel" id="reg-wpp" placeholder="11 99999-0000" oninput="mascaraFone(this)" inputmode="tel"></div>
         <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off"></div>
-
-        <!-- Planos -->
-        <div class="plan-cards">
-          <div class="plan-card trial-card on" id="card-trial" onclick="selectPlan(this,'trial')">
-            <div class="plan-badge" style="background:var(--gdk)">🎁 Grátis</div>
-            <div class="plan-card-name">Trial</div>
-            <div class="plan-card-price">R$0<sub>/7 dias</sub></div>
-            <div class="plan-card-desc">Sem cartão · Cancela quando quiser</div>
-          </div>
-          <div class="plan-card" id="card-mensal" onclick="selectPlan(this,'mensal')">
-            <div class="plan-card-name">Mensal</div>
-            <div class="plan-card-price">R$19<sub>/mês</sub></div>
-            <div class="plan-card-desc">Alertas ilimitados · Cancela quando quiser</div>
-          </div>
-          <div class="plan-card" id="card-trimestral" onclick="selectPlan(this,'trimestral')">
-            <div class="plan-badge">⭐ Popular</div>
-            <div class="plan-card-name">Trimestral</div>
-            <div class="plan-card-price">R$38<sub>/3 meses</sub></div>
-            <div class="plan-card-desc">Equivale a 1 mês grátis</div>
-          </div>
-        </div>
 
         <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
           <div class="spinner" id="spin1"></div>
-          <span id="btn1-text">Criar conta grátis &rarr;</span>
+          <span id="btn1-text">Começar grátis por 7 dias &rarr;</span>
         </button>
-        <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
+        <p class="hint">Sem cartão de crédito · Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
+        <p class="hint"><a href="saiuvaga-pagamento.html">Já sei o que quero — ver planos pagos →</a></p>
       </div>
 
       <div id="view-entrar" style="display:none">
@@ -405,13 +384,11 @@ async function fetchComRetry(url, options, tentativas = 2, timeoutMs = 8000) {
 async function cadastrar() {
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
-  const wpp   = (document.getElementById('reg-wpp')?.value || '').trim();
   const pass  = (document.getElementById('reg-pass')?.value || '');
 
   if (!nome) { showError('Preencha o nome completo.', 'erro', 'reg-nome'); return; }
   if (!email) { showError('Preencha o e-mail.', 'erro', 'reg-email'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Digite um e-mail válido.', 'erro', 'reg-email'); return; }
-  if (!wpp || wpp.replace(/\D/g,'').length < 10) { showError('Preencha um WhatsApp válido com DDD.', 'erro', 'reg-wpp'); return; }
   if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.', 'erro', 'reg-pass'); return; }
   setLoading('btn-cadastrar','spin1',true); hideError();
   let data, error;
@@ -454,7 +431,6 @@ async function cadastrar() {
           user_id: data.user.id,
           email,
           nome,
-          whatsapp: wpp.replace(/\D/g,''),
           plano: planoSelecionado,
         }),
       });
@@ -470,7 +446,7 @@ async function cadastrar() {
           const res2 = await fetchComRetry('https://saiuvaga-production.up.railway.app/api/cadastro/completar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: data.user.id, email, nome, whatsapp: wpp.replace(/\D/g,''), plano: planoSelecionado }),
+            body: JSON.stringify({ user_id: data.user.id, email, nome, plano: planoSelecionado }),
           }, 1);
           const resultado2 = await res2.json();
           if (!resultado2.ok) throw new Error(resultado2.erro || 'Falha ao completar cadastro');
