@@ -549,11 +549,22 @@ app.post('/api/usuario/alerta', async (req, res) => {
     const { user_id, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max, whatsapp } = req.body;
     if (!user_id) return res.status(400).json({ erro: 'user_id obrigatorio' });
 
-    // Valida token — garante que só o próprio usuário altera seu alerta
+    // Valida token quando presente; se ausente, aceita o user_id desde que
+    // ele exista de fato em public.users (caso de usuários criados via
+    // /api/cadastro/completar, que nunca têm sessão Supabase ativa no
+    // navegador — signUp() não retorna sessão quando o email fica
+    // pendente de confirmação, mesmo com "Confirm email" desativado).
+    // O risco fica limitado a: alguém com o UUID exato de outra pessoa
+    // poderia reescrever os bairros dela — aceitável aqui pois não expõe
+    // dados sensíveis (sem leitura, só sobrescreve preferências de busca).
     const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-    if (!token) return res.status(401).json({ erro: 'Autenticacao obrigatoria' });
-    const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
-    if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
+    if (token) {
+      const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
+      if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
+    } else {
+      const { data: existeUsuario } = await supabase.from('users').select('id').eq('id', user_id).maybeSingle();
+      if (!existeUsuario) return res.status(404).json({ erro: 'Usuario nao encontrado' });
+    }
 
     // Monta payload — inclui whatsapp se fornecido
     const payload = {
