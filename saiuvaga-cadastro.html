@@ -497,6 +497,10 @@ async function cadastrar() {
     // mas era expulsa de volta para o cadastro na sequência de redirects seguinte.
     if (data.user?.id) {
       sessionStorage.setItem('sv_uid', data.user.id);
+      // Remove qualquer token residual de testes/sessões anteriores na mesma aba —
+      // sem isso, um sv_token velho e inválido seria enviado para /api/usuario/alerta,
+      // que o rejeitaria com 403 em vez de cair no fluxo sem-token (que confia no user_id).
+      sessionStorage.removeItem('sv_token');
       const tokenSessao = data.session?.access_token || '';
       if (tokenSessao) sessionStorage.setItem('sv_token', tokenSessao);
     }
