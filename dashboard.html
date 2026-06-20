@@ -91,7 +91,8 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
 .filter-btn { height: 28px; padding: 0 12px; background: transparent; border: 1px solid var(--ln); border-radius: 99px; color: var(--ink3); font-size: 11px; font-weight: 500; font-family: var(--sans); cursor: pointer; transition: all .15s; }
 .filter-btn:hover, .filter-btn.active { border-color: var(--g); color: var(--g); background: var(--glt); }
 .error-banner { background: #2a0d0d; border: 1px solid #3d1414; border-radius: var(--r); padding: 12px 16px; font-size: 12px; color: #ef4444; margin-bottom: 16px; display: none; font-family: var(--mono); }
-
+.del-btn { width: 28px; height: 28px; background: transparent; border: 1px solid var(--ln); border-radius: 6px; color: var(--ink3); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+.del-btn:hover { border-color: #ef4444; color: #ef4444; background: #2a0d0d; }
 /* Botão WhatsApp Flutuante */
 .wpp-float{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 .wpp-tooltip{background:#111a15;color:#e8f0eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13.5px;font-weight:500;padding:9px 14px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.4);white-space:nowrap;opacity:0;transform:translateX(10px);transition:opacity .25s ease,transform .25s ease;pointer-events:none;border:1px solid #1a2e22}
@@ -104,7 +105,6 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
 </style>
 </head>
 <body>
-
 <div id="lock-screen">
   <div class="lock-card">
     <div class="lock-logo">&#128269;</div>
@@ -115,7 +115,6 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
     <div class="lock-error" id="lock-error">Senha incorreta</div>
   </div>
 </div>
-
 <div id="app">
   <div class="topbar">
     <div class="topbar-left">
@@ -128,10 +127,8 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
       <button class="refresh-btn" onclick="loadAll()">&#8635; Atualizar</button>
     </div>
   </div>
-
   <div class="main">
     <div class="error-banner" id="error-banner"></div>
-
     <div class="metrics" id="metrics">
       <div class="metric"><div class="metric-label">Total cadastros</div><div class="metric-value" id="m-total">—</div><div class="metric-sub">todos os usuários</div></div>
       <div class="metric" style="--accent:#F5A623"><div class="metric-label">Em trial</div><div class="metric-value" id="m-trial">—</div><div class="metric-sub">7 dias grátis ativos</div></div>
@@ -143,7 +140,6 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
       <div class="metric" style="--accent:#10b981"><div class="metric-label">Alertas enviados</div><div class="metric-value" id="m-alertas">—</div><div class="metric-sub" id="m-alertas-sub">total histórico</div></div>
       <div class="metric" style="--accent:#8b5cf6"><div class="metric-label">Com alertas ativos</div><div class="metric-value" id="m-com-alerta">—</div><div class="metric-sub">usuários configurados</div></div>
     </div>
-
     <div class="grid3">
       <div class="panel">
         <div class="panel-header"><div class="panel-title">Cadastros — últimos 7 dias</div></div>
@@ -157,12 +153,12 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
         <div class="pay-list" id="pay-list"><div class="empty">Carregando...</div></div>
       </div>
     </div>
-
     <div class="panel" style="margin-bottom:24px">
       <div class="panel-header"><div class="panel-title">Todos os usuários</div><div class="panel-count" id="users-count">—</div></div>
-      <div class="search-bar"><input type="text" class="search-input" id="search" placeholder="Buscar por nome, e-mail ou WhatsApp..." oninput="filterUsers()"></div>
+      <div class="search-bar"><input type="text" class="search-input" id="search" name="dashboard-user-filter" placeholder="Buscar por nome, e-mail ou WhatsApp..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="filterUsers()"></div>
       <div class="filter-row">
         <button class="filter-btn active" onclick="setFilter('todos',this)">Todos</button>
+        <button class="filter-btn" onclick="setFilter('novos',this)">Novos (24h)</button>
         <button class="filter-btn" onclick="setFilter('trial',this)">Em trial</button>
         <button class="filter-btn" onclick="setFilter('pagante',this)">Pagantes</button>
         <button class="filter-btn" onclick="setFilter('expirado',this)">Expirados</button>
@@ -172,18 +168,17 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
         <table>
           <thead>
             <tr>
-              <th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Plano</th><th>Status</th><th>Trial</th><th>Validade</th><th>Cadastro</th><th>Último pagamento</th>
+              <th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Plano</th><th>Status</th><th>Trial</th><th>Validade</th><th>Cadastro</th><th>Último pagamento</th><th>Ação</th>
             </tr>
           </thead>
           <tbody id="users-tbody">
-            <tr class="loading-row"><td colspan="9"><span class="spinner-sm"></span>Carregando usuários...</td></tr>
+            <tr class="loading-row"><td colspan="10"><span class="spinner-sm"></span>Carregando usuários...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 </div>
-
 <!-- Botão WhatsApp Flutuante -->
 <div class="wpp-float" id="wppFloat">
   <div class="wpp-tooltip">Fale com a gente no WhatsApp &#128172;</div>
@@ -191,13 +186,11 @@ td.date { font-family: var(--mono); font-size: 11px; color: var(--ink3); }
     <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C7.163 0 0 7.163 0 16c0 2.822.736 5.469 2.027 7.77L0 32l8.43-2.007A15.93 15.93 0 0 0 16 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.27 13.27 0 0 1-6.771-1.852l-.486-.29-5.003 1.192 1.215-4.87-.318-.5A13.267 13.267 0 0 1 2.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.27-9.874c-.398-.199-2.354-1.162-2.718-1.295-.364-.133-.63-.199-.895.2-.265.398-1.028 1.294-1.26 1.56-.232.265-.464.298-.862.1-.398-.2-1.681-.62-3.203-1.977-1.183-1.057-1.982-2.362-2.214-2.76-.232-.398-.025-.613.175-.81.18-.178.398-.465.597-.697.199-.232.265-.398.398-.664.133-.265.066-.497-.033-.697-.1-.199-.895-2.158-1.227-2.955-.323-.775-.65-.67-.895-.683l-.762-.013c-.265 0-.696.1-.1060.497-.364.398-1.393 1.362-1.393 3.32 0 1.96 1.427 3.852 1.626 4.118.199.265 2.808 4.286 6.803 6.012.951.41 1.693.656 2.272.839.954.303 1.824.26 2.511.158.766-.114 2.354-.963 2.686-1.892.332-.93.332-1.726.232-1.892-.099-.166-.364-.265-.762-.464z"/></svg>
   </a>
 </div>
-
 <script>
 const API = 'https://saiuvaga-production.up.railway.app';
 let adminToken = '';
 let allUsers = [];
 let currentFilter = 'todos';
-
 async function unlock() {
   const pass = document.getElementById('lock-pass').value;
   if (!pass) return;
@@ -221,17 +214,13 @@ async function unlock() {
     document.getElementById('lock-error').style.display = 'block';
   }
 }
-
 function startClock() {
   function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }); }
   tick(); setInterval(tick, 10000);
 }
-
 function showError(msg) { const el = document.getElementById('error-banner'); el.textContent = '⚠ ' + msg; el.style.display = 'block'; }
 function hideError() { document.getElementById('error-banner').style.display = 'none'; }
-
 async function loadAll() { hideError(); await Promise.all([loadUsers(), loadPayments(), loadStats()]); }
-
 async function loadStats() {
   try {
     // Busca contagem de imóveis e alertas via admin health
@@ -250,13 +239,12 @@ async function loadStats() {
     }
   } catch(e) {}
 }
-
 async function loadUsers() {
   try {
     const res = await fetch(`${API}/api/admin/users`, {
       headers: { 'Authorization': `Bearer ${adminToken}` }
     });
-    if (!res.ok) { showError(`Erro ao carregar usuários: ${res.status}`); document.getElementById('users-tbody').innerHTML = '<tr class="loading-row"><td colspan="9">Erro ao carregar dados.</td></tr>'; return; }
+    if (!res.ok) { showError(`Erro ao carregar usuários: ${res.status}`); document.getElementById('users-tbody').innerHTML = '<tr class="loading-row"><td colspan="10">Erro ao carregar dados.</td></tr>'; return; }
     const json = await res.json();
     const data = json.data || [];
     allUsers = data;
@@ -266,7 +254,6 @@ async function loadUsers() {
     showError(`Erro de conexão: ${e.message}`);
   }
 }
-
 function renderMetrics(users) {
   const agora = new Date();
   const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -290,7 +277,6 @@ function renderMetrics(users) {
   const comAlerta = users.filter(u => u.alerta_bairros && u.alerta_bairros.length > 0).length;
   document.getElementById('m-com-alerta').textContent = comAlerta;
 }
-
 function renderChart(users) {
   const bars = document.getElementById('chart-bars');
   const labels = document.getElementById('chart-labels');
@@ -308,20 +294,20 @@ function renderChart(users) {
     const lbl = document.createElement('div'); lbl.className = 'chart-label'; lbl.textContent = d.label; labels.appendChild(lbl);
   });
 }
-
 function renderUsers(users) {
   const tbody = document.getElementById('users-tbody');
   const search = document.getElementById('search').value.toLowerCase();
   const agora = new Date();
   let filtered = users.filter(u => {
     if (search) { const q = `${u.nome || ''} ${u.email || ''} ${u.whatsapp || ''}`.toLowerCase(); if (!q.includes(search)) return false; }
+    if (currentFilter === 'novos') { const vinte4h = new Date(); vinte4h.setHours(vinte4h.getHours() - 24); return new Date(u.criado_em) >= vinte4h; }
     if (currentFilter === 'trial') return u.plano === 'trial' && u.ativo && new Date(u.plano_validade) > agora;
     if (currentFilter === 'pagante') return u.ativo && u.plano !== 'trial' && new Date(u.plano_validade) > agora;
     if (currentFilter === 'expirado') return u.trial_usado && !u.ativo;
     if (currentFilter === 'inativo') return !u.ativo && !u.trial_usado;
     return true;
   });
-  if (!filtered.length) { tbody.innerHTML = '<tr class="loading-row"><td colspan="9">Nenhum usuário encontrado</td></tr>'; return; }
+  if (!filtered.length) { tbody.innerHTML = '<tr class="loading-row"><td colspan="10">Nenhum usuário encontrado</td></tr>'; return; }
   tbody.innerHTML = filtered.map(u => {
     const validade = u.plano_validade ? new Date(u.plano_validade) : null;
     const ativo = u.ativo && validade && validade > agora;
@@ -332,13 +318,30 @@ function renderUsers(users) {
     const trialPill = u.trial_usado ? `<span class="pill pill-gray">Usado</span>` : `<span class="pill pill-amber">Disponível</span>`;
     const fmt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
     const fmtFull = (d) => d ? new Date(d).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' }) : '—';
-    return `<tr><td class="name">${u.nome || '—'}</td><td class="email">${u.email || '—'}</td><td class="phone">${u.whatsapp || '—'}</td><td>${planoPill}</td><td>${statusPill}</td><td>${trialPill}</td><td class="date">${validade ? `${fmt(validade)} (${diasRestantes}d)` : '—'}</td><td class="date">${fmtFull(u.criado_em)}</td><td class="date">${fmtFull(u.ultimo_pagamento)}</td></tr>`;
+    return `<tr><td class="name">${u.nome || '—'}</td><td class="email">${u.email || '—'}</td><td class="phone">${u.whatsapp || '—'}</td><td>${planoPill}</td><td>${statusPill}</td><td>${trialPill}</td><td class="date">${validade ? `${fmt(validade)} (${diasRestantes}d)` : '—'}</td><td class="date">${fmtFull(u.criado_em)}</td><td class="date">${fmtFull(u.ultimo_pagamento)}</td><td><button class="del-btn" onclick="deletarUsuario('${u.id}', '${(u.email || u.nome || 'este usuário').replace(/'/g, "\\'")}')" title="Excluir usuário">&#128465;</button></td></tr>`;
   }).join('');
 }
-
 function filterUsers() { renderUsers(allUsers); }
 function setFilter(f, btn) { currentFilter = f; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderUsers(allUsers); }
 
+// -- Excluir usuario (com confirmacao dupla — acao irreversivel) -----------
+async function deletarUsuario(id, label) {
+  if (!confirm(`Excluir "${label}" definitivamente?\n\nIsso remove a conta do banco de dados e do sistema de login. Não pode ser desfeito.`)) return;
+  if (!confirm(`Tem certeza mesmo? Última chance — "${label}" será apagado para sempre.`)) return;
+  try {
+    const res = await fetch(`${API}/api/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) { showError('Erro ao excluir: ' + (json.erro || res.status)); return; }
+    allUsers = allUsers.filter(u => u.id !== id);
+    renderMetrics(allUsers); renderChart(allUsers); renderUsers(allUsers);
+    document.getElementById('users-count').textContent = `${allUsers.length} usuários`;
+  } catch (e) {
+    showError('Erro de conexão ao excluir: ' + e.message);
+  }
+}
 async function loadPayments() {
   const list = document.getElementById('pay-list');
   try {
@@ -355,9 +358,7 @@ async function loadPayments() {
   list.innerHTML = data.map(p => `<div class="pay-item"><div class="pay-icon" style="background:${planoBg[p.plano] || '#1a1a1a'}">${planoEmoji[p.plano] || '&#128179;'}</div><div class="pay-info"><div class="pay-name">${p.nome || p.email}</div><div class="pay-meta">${p.email} &middot; ${new Date(p.ultimo_pagamento).toLocaleDateString('pt-BR')}</div></div><div class="pay-amount">${planoValor[p.plano] || '—'}</div></div>`).join('');
   } catch(e) { list.innerHTML = '<div class="empty">Erro ao carregar pagamentos</div>'; }
 }
-
 setInterval(() => { if (document.getElementById('app').style.display !== 'none') loadAll(); }, 60000);
-
 (function(){var f=document.getElementById('wppFloat');if(!sessionStorage.getItem('wppShown')){setTimeout(function(){f.classList.add('show-tip');setTimeout(function(){f.classList.remove('show-tip');},4000);},3000);sessionStorage.setItem('wppShown','1');}})();
 </script>
 </body>
