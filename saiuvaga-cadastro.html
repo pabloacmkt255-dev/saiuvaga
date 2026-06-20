@@ -490,6 +490,16 @@ async function cadastrar() {
   function finalizarCadastroTrial() {
     setLoading('btn-cadastrar','spin1',false);
     if (typeof gtag !== 'undefined') { gtag('event','sign_up',{'method':'email'}); }  // Lead/conversion disparado no confirmado.html após confirmação real
+    // FIX: saiuvaga-alertas.html e saiuvaga-busca.html exigem sessionStorage.sv_uid
+    // OU uma sessão ativa do Supabase Auth para deixar o usuário entrar. Como o
+    // cadastro agora é finalizado via /api/cadastro/completar (backend, sem depender
+    // de sessão do navegador), nunca havia sv_uid salvo — a pessoa via "Conta criada!"
+    // mas era expulsa de volta para o cadastro na sequência de redirects seguinte.
+    if (data.user?.id) {
+      sessionStorage.setItem('sv_uid', data.user.id);
+      const tokenSessao = data.session?.access_token || '';
+      if (tokenSessao) sessionStorage.setItem('sv_token', tokenSessao);
+    }
     // Mensagem diferente por plano
     if (planoSelecionado === 'trial') {
       if (typeof fbq !== 'undefined') { fbq('track', 'Lead'); fbq('track', 'StartTrial', {'value': 0, 'currency': 'BRL', 'predicted_ltv': 19}); }
