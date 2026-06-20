@@ -419,7 +419,10 @@ app.post('/api/trial/ativar', async (req, res) => {
 
     // Valida token de sessao Supabase - rejeita chamadas sem autenticacao valida
     const authHeader = req.headers['authorization'] || '';
-    const token = authHeader.replace('Bearer ', '').trim();
+    // FIX: regex em vez de replace('Bearer ', '') — alguns clientes/proxies removem o
+    // espaço final do header HTTP, fazendo "Bearer " virar "Bearer" e o replace literal
+    // falhar silenciosamente, deixando "Bearer" inteiro como "token" (ilegível pelo JWT).
+    const token = authHeader.replace(/^Bearer\s*/i, '').trim();
     if (!token) return res.status(401).json({ erro: 'Autenticacao obrigatoria' });
 
     const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
@@ -557,15 +560,16 @@ app.post('/api/usuario/alerta', async (req, res) => {
     // O risco fica limitado a: alguém com o UUID exato de outra pessoa
     // poderia reescrever os bairros dela — aceitável aqui pois não expõe
     // dados sensíveis (sem leitura, só sobrescreve preferências de busca).
-    const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-    console.log(`   🔍 [DIAGNOSTICO alerta] header_raw=${JSON.stringify(req.headers['authorization'])} token_extraido=${JSON.stringify(token)} tem_token=${!!token} user_id=${user_id}`);
+    // FIX: regex em vez de replace('Bearer ', '') — alguns clientes/proxies removem o
+    // espaço final do header HTTP, fazendo "Bearer " virar "Bearer". O replace literal
+    // não casava, deixando "Bearer" inteiro como "token" (tem_token=true incorretamente),
+    // o que forçava o caminho COM_TOKEN e falhava a validação JWT mesmo sem token real.
+    const token = (req.headers['authorization'] || '').replace(/^Bearer\s*/i, '').trim();
     if (token) {
       const { data: { user: sessionUser }, error: authErr } = await supabase.auth.getUser(token);
-      console.log(`   🔍 [DIAGNOSTICO alerta] caminho=COM_TOKEN authErr=${authErr?.message || 'nenhum'} sessionUser_id=${sessionUser?.id || 'nenhum'}`);
       if (authErr || !sessionUser || sessionUser.id !== user_id) return res.status(403).json({ erro: 'Acesso negado' });
     } else {
       const { data: existeUsuario } = await supabase.from('users').select('id').eq('id', user_id).maybeSingle();
-      console.log(`   🔍 [DIAGNOSTICO alerta] caminho=SEM_TOKEN existeUsuario=${!!existeUsuario}`);
       if (!existeUsuario) return res.status(404).json({ erro: 'Usuario nao encontrado' });
     }
 
@@ -876,7 +880,8 @@ function verificarAdmin(req, res) {
     return false;
   }
   const auth = req.headers['authorization'] || '';
-  const senha = auth.replace('Bearer ', '').trim();
+  // FIX: regex em vez de replace('Bearer ', '') literal — ver comentário nas outras rotas.
+  const senha = auth.replace(/^Bearer\s*/i, '').trim();
   if (senha !== ADMIN_SECRET) {
     res.status(401).json({ erro: 'Acesso negado' });
     return false;
