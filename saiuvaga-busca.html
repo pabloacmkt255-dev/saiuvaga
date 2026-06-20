@@ -437,53 +437,80 @@ const POR_PAGINA = 12;
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   try {
-    const sessionResult = await Promise.race([
-      sb.auth.getSession(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-    ]);
-    const session = sessionResult?.data?.session;
-    if (!session?.user) { window.location.href = 'saiuvaga-cadastro.html'; return; }
+    // FIX (20/06): antes, esta página exigia sessão Supabase real e
+    // redirecionava qualquer um sem ela direto para o cadastro — mesmo
+    // usuários com trial ativo, criados via /api/cadastro/completar, que
+    // nunca têm sessão real no navegador (signUp() não retorna sessão
+    // quando o e-mail fica pendente de confirmação). Agora tenta
+    // sessionStorage.sv_uid primeiro (salvo pelo cadastro/alertas), com
+    // sessão Supabase real como complemento opcional — mesmo padrão já
+    // usado em saiuvaga-alertas.html.
+    let uid = sessionStorage.getItem('sv_uid');
+    let sessionToken = sessionStorage.getItem('sv_token') || '';
+    let emailLabel = null;
 
-    userId = session.user.id;
-    // Injeta token de autenticação no cliente Supabase para RLS passar
-    await sb.auth.setSession({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token || '',
-    });
-    // Salva user_id e token para outras páginas usarem (persiste na sessão do browser)
-    sessionStorage.setItem('sv_uid', userId);
-    sessionStorage.setItem('sv_token', session.access_token || '');
+    if (!uid) {
+      const sessionResult = await Promise.race([
+        sb.auth.getSession(),
+        new Promise(resolve => setTimeout(() => resolve(null), 8000))
+      ]);
+      const session = sessionResult?.data?.session;
+      if (session?.user) {
+        uid = session.user.id;
+        sessionToken = session.access_token || '';
+        emailLabel = session.user.email;
+        sessionStorage.setItem('sv_uid', uid);
+        sessionStorage.setItem('sv_token', sessionToken);
+        // Injeta sessão real no cliente Supabase quando ela existe —
+        // necessário para RLS passar nas chamadas diretas a sb.from(...)
+        try {
+          await sb.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token || '',
+          });
+        } catch(e) {}
+      }
+    }
+
+    if (!uid) { showWall('auth'); return; }
+
+    userId = uid;
 
     // Usa backend (service_key) para evitar bloqueio de RLS no anon key
     const agora = new Date();
-    let statusOk = false;
     let user = null;
     try {
       const statusRes = await fetch(`https://saiuvaga-production.up.railway.app/api/usuario/status?user_id=${userId}`);
       const status = await statusRes.json();
       const validade = status.validade ? new Date(status.validade) : null;
       if (!status.ativo || !validade || validade <= agora) { showWall('pay'); return; }
-      statusOk = true;
-      // Busca preferências de alerta (não bloqueado por RLS pois usuário está autenticado)
-      const { data: userData } = await sb.from('users')
-        .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
-        .eq('id', userId).maybeSingle();
-      user = userData || { ativo: true, plano: status.plano, plano_validade: status.validade, trial_usado: status.trial_usado };
+      // Busca preferências de alerta — pode falhar por RLS se não há sessão
+      // real (usuário via /api/cadastro/completar); nesse caso usa só os
+      // dados de status já obtidos via backend, sem travar a página.
+      try {
+        const { data: userData } = await sb.from('users')
+          .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
+          .eq('id', userId).maybeSingle();
+        user = userData;
+      } catch(e) { /* segue com fallback abaixo */ }
+      if (!user) user = { ativo: true, plano: status.plano, plano_validade: status.validade, trial_usado: status.trial_usado };
     } catch(e) {
-      // Fallback direto ao Supabase
-      const { data: userData } = await sb.from('users')
-        .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
-        .eq('id', userId).maybeSingle();
-      user = userData;
-      const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
-      const ativo = !!(user?.ativo && validade && validade > agora);
-      if (!ativo) { showWall('pay'); return; }
+      // Backend indisponível — tenta direto via Supabase como último recurso
+      try {
+        const { data: userData } = await sb.from('users')
+          .select('ativo, plano, plano_validade, trial_usado, alerta_bairros, alerta_preco_max, alerta_quartos_min, alerta_area_min, alerta_tipos, alerta_freq_max')
+          .eq('id', userId).maybeSingle();
+        user = userData;
+        const validade = user?.plano_validade ? new Date(user.plano_validade) : null;
+        const ativo = !!(user?.ativo && validade && validade > agora);
+        if (!ativo) { showWall('pay'); return; }
+      } catch(e2) { showWall('pay'); return; }
     }
 
     // Badge do plano
     const label = document.getElementById('user-label');
     const badge = document.getElementById('plan-badge');
-    label.textContent = session.user.email?.split('@')[0] || 'usuário';
+    label.textContent = (emailLabel || '').split('@')[0] || 'usuário';
     const validadeBadge = user?.plano_validade ? new Date(user.plano_validade) : null;
     const dias = validadeBadge ? Math.max(0, Math.ceil((validadeBadge - agora) / 86400000)) : 0;
     if (user.plano === 'trial') {
@@ -514,7 +541,7 @@ async function init() {
     document.getElementById('app').style.display = 'block';
 
   } catch(e) {
-    window.location.href = 'saiuvaga-cadastro.html';
+    showWall('auth');
   }
 }
 
@@ -849,7 +876,12 @@ function fecharFiltrosBackdrop(e) {
 }
 
 // ── Logout ────────────────────────────────────────────────────
-async function logout() { await sb.auth.signOut(); window.location.href = 'saiuvaga-cadastro.html'; }
+async function logout() {
+  sessionStorage.removeItem('sv_uid');
+  sessionStorage.removeItem('sv_token');
+  try { await sb.auth.signOut(); } catch(e) {}
+  window.location.href = 'saiuvaga-cadastro.html';
+}
 
 // ── Toast ─────────────────────────────────────────────────────
 let _tt;
