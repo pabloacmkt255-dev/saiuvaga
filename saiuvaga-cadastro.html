@@ -110,14 +110,24 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .error-msg.warn-msg { color: #92400E; background: #FEF3C7; }
 .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.mobile-proof { display: none; }
 @media (max-width: 768px) {
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
-  .right { border-left: none; padding: 32px 20px; min-height: 100vh; }
-  .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 28px; }
+  .right { border-left: none; padding: 32px 20px; min-height: 100vh; justify-content: flex-start; padding-top: 28px; }
+  .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 20px; }
   .plan-cards { grid-template-columns: 1fr; gap: 10px; }
   .plan-card { text-align: left; padding: 14px; }
   .plan-card-price { font-size: 22px; }
+  .mobile-proof { display: block; margin-bottom: 24px; }
+  .mobile-proof .hero-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--glt); border: 1px solid rgba(29,158,117,.2); border-radius: 99px; padding: 5px 14px; font-size: 11px; font-weight: 500; color: var(--gdk); margin-bottom: 14px; }
+  .mobile-proof .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--g); animation: pulse 1.5s infinite; }
+  .mobile-proof .mp-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; line-height: 1.2; color: var(--ink); margin-bottom: 14px; letter-spacing: -.02em; }
+  .mobile-proof .mp-title em { font-style: normal; color: var(--g); }
+  .mobile-proof .mp-testi { background: var(--wh); border: 1px solid var(--ln); border-radius: var(--r); padding: 11px 13px; display: flex; align-items: flex-start; gap: 10px; }
+  .mobile-proof .mp-av { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; background: #1D9E75; }
+  .mobile-proof .mp-text { font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
+  .mobile-proof .mp-name { font-size: 10.5px; color: var(--ink3); font-weight: 500; margin-top: 3px; }
 }
 .mobile-logo { display: none; }
 .wpp-float{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px} @media(max-width:600px){.wpp-float{bottom:90px;right:12px;}}
@@ -181,6 +191,18 @@ input:-webkit-autofill:focus {
     <div class="mobile-logo">
       <div class="logo-mark" style="width:32px;height:32px;border-radius:8px"><svg viewBox="0 0 18 18" fill="none" style="width:14px;height:14px"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
       SaiuVaga
+    </div>
+
+    <div class="mobile-proof">
+      <div class="hero-tag"><div class="pulse"></div>1.247 imóveis monitorados agora</div>
+      <div class="mp-title">A vaga que você quer <em>avisa você</em> em segundos</div>
+      <div class="mp-testi">
+        <div class="mp-av">AC</div>
+        <div>
+          <div class="mp-text">"Consegui meu apartamento em Pinheiros em 3 dias. O alerta chegou antes de aparecer no Google."</div>
+          <div class="mp-name">Ana Clara, Pinheiros</div>
+        </div>
+      </div>
     </div>
 
     <div id="main-form">
