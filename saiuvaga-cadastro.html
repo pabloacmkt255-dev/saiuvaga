@@ -108,6 +108,10 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .error-msg { display: none; font-size: 13px; color: #B91C1C; background: #FEE2E2; border-radius: var(--r); padding: 10px 14px; margin-bottom: 14px; }
 .error-msg.success-msg { color: #0F6E56; background: #E1F5EE; }
 .error-msg.warn-msg { color: #92400E; background: #FEF3C7; }
+.trust-badges { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 16px; padding: 10px 8px; background: var(--glt); border-radius: var(--r); }
+.trust-badge { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; text-align: center; }
+.trust-badge-ico { font-size: 16px; line-height: 1; }
+.trust-badge-text { font-size: 10px; font-weight: 600; color: var(--gdk); line-height: 1.25; }
 .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .mobile-proof { display: none; }
@@ -245,11 +249,17 @@ input:-webkit-autofill:focus {
         <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
         <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off"></div>
 
+        <div class="trust-badges">
+          <div class="trust-badge"><div class="trust-badge-ico">💳</div><div class="trust-badge-text">Sem cartão<br>de crédito</div></div>
+          <div class="trust-badge"><div class="trust-badge-ico">🔓</div><div class="trust-badge-text">Cancele<br>quando quiser</div></div>
+          <div class="trust-badge"><div class="trust-badge-ico">🔒</div><div class="trust-badge-text">Seus dados<br>protegidos</div></div>
+        </div>
+
         <button class="submit-btn" id="btn-cadastrar" onclick="cadastrar()">
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Começar grátis por 7 dias &rarr;</span>
         </button>
-        <p class="hint">Sem cartão de crédito · Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
+        <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
         <p class="hint"><a href="saiuvaga-pagamento.html">Já sei o que quero — ver planos pagos →</a></p>
       </div>
 
