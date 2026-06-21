@@ -128,6 +128,14 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   .mobile-proof .mp-av { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; background: #1D9E75; }
   .mobile-proof .mp-text { font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
   .mobile-proof .mp-name { font-size: 10.5px; color: var(--ink3); font-weight: 500; margin-top: 3px; }
+  .mobile-proof .mp-wapp { background: #ECE5DD; border-radius: var(--r); overflow: hidden; margin-bottom: 12px; }
+  .mobile-proof .mp-wapp-bar { background: #075E54; padding: 8px 12px; display: flex; align-items: center; gap: 7px; }
+  .mobile-proof .mp-wapp-av { width: 22px; height: 22px; border-radius: 50%; background: #128C7E; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .mobile-proof .mp-wapp-name { font-size: 11px; font-weight: 600; color: #fff; }
+  .mobile-proof .mp-wapp-status { font-size: 9px; color: rgba(255,255,255,.6); }
+  .mobile-proof .mp-wapp-body { padding: 10px 9px; }
+  .mobile-proof .mp-bubble { background: #fff; border-radius: 0 9px 9px 9px; padding: 8px 11px; font-size: 11.5px; line-height: 1.5; box-shadow: 0 1px 2px rgba(0,0,0,.1); max-width: 92%; }
+  .mobile-proof .mp-bubble-time { font-size: 8.5px; color: #999; text-align: right; margin-top: 3px; }
 }
 .mobile-logo { display: none; }
 .wpp-float{position:fixed;bottom:28px;right:28px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px} @media(max-width:600px){.wpp-float{bottom:90px;right:12px;}}
@@ -196,6 +204,17 @@ input:-webkit-autofill:focus {
     <div class="mobile-proof">
       <div class="hero-tag"><div class="pulse"></div>1.247 imóveis monitorados agora</div>
       <div class="mp-title">A vaga que você quer <em>avisa você</em> em segundos</div>
+      <div class="mp-wapp">
+        <div class="mp-wapp-bar"><div class="mp-wapp-av">&#127968;</div><div><div class="mp-wapp-name">SaiuVaga</div><div class="mp-wapp-status">em linha</div></div></div>
+        <div class="mp-wapp-body">
+          <div class="mp-bubble">
+            <strong>&#128680; Nova vaga &mdash; Pinheiros!</strong><br>
+            Ap. 2 quartos &middot; 55m&sup2;<br>
+            &#128176; R$ 1.650/m&ecirc;s
+            <div class="mp-bubble-time">agora &#10003;&#10003;</div>
+          </div>
+        </div>
+      </div>
       <div class="mp-testi">
         <div class="mp-av">AC</div>
         <div>
