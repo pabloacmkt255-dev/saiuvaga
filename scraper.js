@@ -315,6 +315,9 @@ function formatarImoveisWpp(imoveis, intencao) {
   return msg;
 }
 
+// ─── Estado de onboarding em memória (lead novo via campanha) ────────────────
+const onboardingState = new Map(); // phone → { step, bairro, tipo, preco }
+
 // ─── Processa mensagem recebida no WhatsApp ───────────────────────────────────
 async function processarMensagem(phone, text) {
   try {
@@ -339,8 +342,65 @@ async function processarMensagem(phone, text) {
         }).ilike('whatsapp', `%${numero}%`);
         await enviarWhatsApp(phone, null, '✅ Seus alertas foram cancelados. Para reativar, acesse saiuvaga.com.br');
       } else {
-        await enviarWhatsApp(phone, null, 'Número não encontrado em nossa base. Acesse saiuvaga.com.br para cadastrar.');
+        await enviarWhatsApp(phone, null, '✅ Tudo certo! Se quiser receber alertas de imóveis, é só me dizer qual bairro você procura 🏠');
       }
+      return;
+    }
+
+    // ── Onboarding para leads novos (não cadastrados) ─────────────────────────
+    if (!user) {
+      const state = onboardingState.get(phone) || { step: 0 };
+
+      // Passo 0 — boas-vindas e pergunta sobre bairro
+      if (state.step === 0) {
+        onboardingState.set(phone, { step: 1 });
+        await enviarWhatsApp(phone, null,
+          `👋 Oi! Sou o assistente do *SaiuVaga* — te aviso no WhatsApp assim que sair um apartamento em SP, antes de aparecer no Google ou OLX.\n\n📍 Qual bairro (ou região) você está procurando?`
+        );
+        return;
+      }
+
+      // Passo 1 — recebeu o bairro, pergunta tipo
+      if (state.step === 1) {
+        onboardingState.set(phone, { ...state, step: 2, bairro: text.trim() });
+        await enviarWhatsApp(phone, null,
+          `Ótimo! E o que você procura?\n\n1️⃣ Apartamento\n2️⃣ Casa\n3️⃣ Kitnet/Studio\n4️⃣ Qualquer tipo`
+        );
+        return;
+      }
+
+      // Passo 2 — recebeu o tipo, pergunta faixa de preço
+      if (state.step === 2) {
+        const tipoMap = { '1': 'Apartamento', '2': 'Casa', '3': 'Kitnet/Studio', '4': 'Qualquer tipo' };
+        const tipo = tipoMap[text.trim()] || text.trim();
+        onboardingState.set(phone, { ...state, step: 3, tipo });
+        await enviarWhatsApp(phone, null,
+          `Perfeito! 💰 Qual a faixa de aluguel que você tem em mente?\n\n1️⃣ Até R$ 1.500\n2️⃣ R$ 1.500 a R$ 2.500\n3️⃣ R$ 2.500 a R$ 4.000\n4️⃣ Acima de R$ 4.000`
+        );
+        return;
+      }
+
+      // Passo 3 — recebeu a faixa, entrega o link de cadastro com contexto
+      if (state.step === 3) {
+        const precoMap = {
+          '1': 'até R$ 1.500', '2': 'R$ 1.500 a R$ 2.500',
+          '3': 'R$ 2.500 a R$ 4.000', '4': 'acima de R$ 4.000'
+        };
+        const preco = precoMap[text.trim()] || text.trim();
+        const { bairro, tipo } = state;
+        onboardingState.delete(phone);
+        await enviarWhatsApp(phone, null,
+          `Anotei tudo! 📋\n\n📍 Bairro: *${bairro}*\n🏠 Tipo: *${tipo}*\n💰 Faixa: *${preco}*\n\nAgora é só criar sua conta grátis (7 dias, sem cartão) e configurar seu alerta — você vai receber as vagas antes de todo mundo:\n\n👉 saiuvaga.com.br/saiuvaga-cadastro.html\n\nQualquer dúvida é só me chamar aqui! 😊`
+        );
+        console.log(`   🆕 Lead novo onboarding concluído → ${phone} | ${bairro} | ${tipo} | ${preco}`);
+        return;
+      }
+
+      // Fallback — lead novo sem contexto de onboarding (ex: mensagem estranha)
+      onboardingState.set(phone, { step: 1 });
+      await enviarWhatsApp(phone, null,
+        `👋 Oi! Sou o assistente do *SaiuVaga* — te aviso no WhatsApp quando surgir um apartamento em SP antes de aparecer nos portais.\n\n📍 Qual bairro você está procurando?`
+      );
       return;
     }
 
