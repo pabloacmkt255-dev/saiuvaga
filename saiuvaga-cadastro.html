@@ -121,6 +121,11 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
   .right { border-left: none; padding: 32px 20px; min-height: 100vh; justify-content: flex-start; padding-top: 28px; }
+  .tabs { display: none; }
+  #view-entrar { display: none !important; }
+  .divider { font-size: 11px; }
+  #view-cadastrar .hint:last-child { display: none; }
+  .mobile-login-hint { display: block !important; }
   .mobile-logo { display: flex !important; align-items: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 20px; }
   .plan-cards { grid-template-columns: 1fr; gap: 10px; }
   .plan-card { text-align: left; padding: 14px; }
@@ -290,6 +295,7 @@ input:-webkit-autofill:focus {
 
         <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>. Você receberá um e-mail com sua senha temporária.</p>
         <p class="hint"><a href="saiuvaga-pagamento.html">Já sei o que quero — ver planos pagos →</a></p>
+        <p class="hint mobile-login-hint" style="display:none">Já tem conta? <a onclick="document.querySelector('.tabs').style.display='flex';setTab('entrar',document.querySelectorAll('.tab')[1]);this.closest('.mobile-login-hint').style.display='none'" style="cursor:pointer">Entrar →</a></p>
       </div>
 
       <div id="view-entrar" style="display:none">
