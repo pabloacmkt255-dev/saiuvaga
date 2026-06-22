@@ -134,6 +134,17 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   .mobile-proof .mp-name { font-size: 10.5px; color: var(--ink3); font-weight: 500; margin-top: 3px; }
   .mobile-proof .mp-wapp { background: #ECE5DD; border-radius: var(--r); overflow: hidden; margin-bottom: 12px; cursor: pointer; transition: transform .15s ease; }
   .mobile-proof .mp-wapp:active { transform: scale(0.98); }
+  .live-feed { margin-bottom: 14px; }
+  .live-feed-header { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; color: var(--gdk); margin-bottom: 8px; }
+  .live-feed-header .pulse { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; flex-shrink: 0; }
+  .live-feed-list { display: flex; flex-direction: column; gap: 6px; }
+  .live-feed-item { background: var(--wh); border: 1px solid var(--ln); border-radius: 10px; padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; animation: fadeIn .4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .live-feed-info { flex: 1; min-width: 0; }
+  .live-feed-bairro { font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .live-feed-tipo { font-size: 10.5px; color: var(--ink3); }
+  .live-feed-preco { font-size: 12px; font-weight: 700; color: var(--g); white-space: nowrap; }
+  .live-feed-tempo { font-size: 9.5px; color: var(--ink3); white-space: nowrap; }
   .mobile-proof .mp-wapp-bar { background: #075E54; padding: 8px 12px; display: flex; align-items: center; gap: 7px; }
   .mobile-proof .mp-wapp-av { width: 22px; height: 22px; border-radius: 50%; background: #128C7E; display: flex; align-items: center; justify-content: center; font-size: 11px; }
   .mobile-proof .mp-wapp-name { font-size: 11px; font-weight: 600; color: #fff; }
@@ -225,6 +236,13 @@ input:-webkit-autofill:focus {
         <div>
           <div class="mp-text">"Consegui meu apartamento em Pinheiros em 3 dias. O alerta chegou antes de aparecer no Google."</div>
           <div class="mp-name">Ana Clara, Pinheiros</div>
+        </div>
+      </div>
+
+      <div class="live-feed">
+        <div class="live-feed-header"><div class="pulse"></div>Últimos imóveis encontrados agora</div>
+        <div class="live-feed-list" id="live-feed-list">
+          <div class="live-feed-item"><div class="live-feed-info"><div class="live-feed-bairro">Carregando...</div></div></div>
         </div>
       </div>
     </div>
@@ -626,6 +644,48 @@ async function forgotPass() {
 }
 
 (function(){var f=document.getElementById('wppFloat');if(!sessionStorage.getItem('wppShown')){setTimeout(function(){f.classList.add('show-tip');setTimeout(function(){f.classList.remove('show-tip');},4000);},3000);sessionStorage.setItem('wppShown','1');}})();
+</script>
+
+<script>
+(function liveFeed() {
+  const BASE = 'https://saiuvaga-production.up.railway.app';
+  const list = document.getElementById('live-feed-list');
+  if (!list) return;
+
+  function tempoAtras(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
+    if (diff < 1) return 'agora';
+    if (diff < 60) return diff + 'min atrás';
+    const h = Math.floor(diff / 60);
+    return h + 'h atrás';
+  }
+
+  function renderizar(imoveis) {
+    if (!imoveis || imoveis.length === 0) { list.innerHTML = ''; return; }
+    list.innerHTML = imoveis.map(im => `
+      <div class="live-feed-item">
+        <div class="live-feed-info">
+          <div class="live-feed-bairro">📍 ${im.bairro || 'São Paulo'}</div>
+          <div class="live-feed-tipo">${im.tipo || im.titulo || 'Imóvel'}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="live-feed-preco">R$ ${im.preco ? Number(im.preco).toLocaleString('pt-BR') : '—'}</div>
+          <div class="live-feed-tempo">${tempoAtras(im.encontrado_em)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  async function buscar() {
+    try {
+      const r = await fetch(BASE + '/api/imoveis/recentes');
+      const d = await r.json();
+      if (d.ok && d.imoveis) renderizar(d.imoveis);
+    } catch(e) { list.innerHTML = ''; }
+  }
+
+  buscar();
+  setInterval(buscar, 30000);
+})();
 </script>
 </body>
 </html>
