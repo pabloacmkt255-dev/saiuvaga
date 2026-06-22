@@ -2285,7 +2285,7 @@ async function rodarScraper() {
     scraperHealth.consecutiveEmptyCycles = 0;
   }
 
-  const EMPTY_CYCLES_ALERT_THRESHOLD = 2; // ~8h sem nenhum imóvel encontrado
+  const EMPTY_CYCLES_ALERT_THRESHOLD = 3; // ~12h sem nenhum imóvel encontrado
   if (scraperHealth.consecutiveEmptyCycles === EMPTY_CYCLES_ALERT_THRESHOLD && process.env.ADMIN_WHATSAPP) {
     try {
       await enviarWhatsApp(
