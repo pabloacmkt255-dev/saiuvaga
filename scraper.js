@@ -316,7 +316,50 @@ function formatarImoveisWpp(imoveis, intencao) {
 }
 
 // ─── Estado de onboarding em memória (lead novo via campanha) ────────────────
-const onboardingState = new Map(); // phone → { step, bairro, tipo, preco }
+const onboardingState = new Map(); // phone → { step, bairro, tipo, preco, email }
+
+// ─── Cria conta e ativa trial via supabaseAdmin (sem precisar do site) ───────
+async function criarContaViaWhatsApp(phone, nome, email, bairro, tipo, preco) {
+  try {
+    // 1. Cria usuário no Supabase Auth
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: Math.random().toString(36).slice(-10) + 'Sv1!', // senha aleatória forte
+      email_confirm: true, // confirma e-mail automaticamente, sem precisar de link
+    });
+    if (authErr) throw new Error('Erro ao criar auth: ' + authErr.message);
+    const user_id = authData.user.id;
+
+    // 2. Ativa trial de 7 dias
+    const validade = new Date();
+    validade.setDate(validade.getDate() + 7);
+
+    // 3. Insere perfil na tabela users
+    const { error: insertErr } = await supabaseAdmin.from('users').insert({
+      id: user_id,
+      email,
+      nome: nome || null,
+      whatsapp: phone.replace(/\D/g, ''),
+      plano: 'trial',
+      ativo: true,
+      trial_usado: true,
+      plano_validade: validade.toISOString(),
+    });
+    if (insertErr) throw new Error('Erro ao criar perfil: ' + insertErr.message);
+
+    // 4. Salva preferências de alerta
+    await supabaseAdmin.from('users').update({
+      alerta_bairros: bairro,
+      alerta_tipos: tipo !== 'Qualquer tipo' ? tipo : null,
+    }).eq('id', user_id);
+
+    console.log(`   ✅ [WPP-ONBOARDING] Conta criada: ${email} | ${bairro} | trial até ${validade.toLocaleDateString('pt-BR')}`);
+    return { ok: true, validade };
+  } catch (err) {
+    console.error('❌ [WPP-ONBOARDING] Erro ao criar conta:', err.message);
+    return { ok: false, erro: err.message };
+  }
+}
 
 // ─── Processa mensagem recebida no WhatsApp ───────────────────────────────────
 async function processarMensagem(phone, text) {
@@ -380,19 +423,59 @@ async function processarMensagem(phone, text) {
         return;
       }
 
-      // Passo 3 — recebeu a faixa, entrega o link de cadastro com contexto
+      // Passo 3 — recebeu a faixa, pergunta e-mail
       if (state.step === 3) {
         const precoMap = {
           '1': 'até R$ 1.500', '2': 'R$ 1.500 a R$ 2.500',
           '3': 'R$ 2.500 a R$ 4.000', '4': 'acima de R$ 4.000'
         };
         const preco = precoMap[text.trim()] || text.trim();
-        const { bairro, tipo } = state;
-        onboardingState.delete(phone);
+        onboardingState.set(phone, { ...state, step: 4, preco });
         await enviarWhatsApp(phone, null,
-          `Anotei tudo! 📋\n\n📍 Bairro: *${bairro}*\n🏠 Tipo: *${tipo}*\n💰 Faixa: *${preco}*\n\nAgora é só criar sua conta grátis (7 dias, sem cartão) e configurar seu alerta — você vai receber as vagas antes de todo mundo:\n\n👉 saiuvaga.com.br/saiuvaga-cadastro.html\n\nQualquer dúvida é só me chamar aqui! 😊`
+          `Ótimo! 📧 Qual é o seu e-mail? Vou criar sua conta grátis agora mesmo (7 dias sem cartão).`
         );
-        console.log(`   🆕 Lead novo onboarding concluído → ${phone} | ${bairro} | ${tipo} | ${preco}`);
+        return;
+      }
+
+      // Passo 4 — recebeu o e-mail, cria conta e ativa trial
+      if (state.step === 4) {
+        const email = text.trim().toLowerCase();
+        const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailValido) {
+          await enviarWhatsApp(phone, null,
+            `❌ Esse e-mail não parece válido. Me manda seu e-mail completo (ex: nome@gmail.com)`
+          );
+          return;
+        }
+
+        const { bairro, tipo, preco } = state;
+        onboardingState.delete(phone);
+
+        await enviarWhatsApp(phone, null, `⏳ Criando sua conta...`);
+
+        const resultado = await criarContaViaWhatsApp(phone, null, email, bairro, tipo, preco);
+
+        if (resultado.ok) {
+          const dataValidade = resultado.validade.toLocaleDateString('pt-BR');
+          await enviarWhatsApp(phone, null,
+            `✅ *Conta criada e trial ativado!*\n\n📍 Bairro: *${bairro}*\n🏠 Tipo: *${tipo}*\n💰 Faixa: *${preco}*\n\nVocê vai receber alertas aqui mesmo no WhatsApp assim que surgir uma vaga — antes de todo mundo! 🚀\n\n_Trial grátis até ${dataValidade}. Qualquer dúvida é só me chamar aqui._`
+          );
+          console.log(`   🆕 [WPP-ONBOARDING] Funil completo → ${phone} | ${email} | ${bairro}`);
+        } else {
+          // E-mail já existe ou outro erro
+          const jaExiste = resultado.erro?.includes('already registered') || resultado.erro?.includes('already been registered');
+          if (jaExiste) {
+            await enviarWhatsApp(phone, null,
+              `Esse e-mail já tem uma conta no SaiuVaga! 😊\n\nAcesse para entrar: saiuvaga.com.br/saiuvaga-cadastro.html\n\nSe precisar de ajuda, é só me chamar aqui!`
+            );
+          } else {
+            await enviarWhatsApp(phone, null,
+              `❌ Tive um problema técnico ao criar sua conta. Tente pelo site:\n\n👉 saiuvaga.com.br/saiuvaga-cadastro.html\n\nOu tenta de novo aqui mandando seu e-mail!`
+            );
+            // Volta pro passo 4 pra tentar de novo
+            onboardingState.set(phone, { ...state, step: 4 });
+          }
+        }
         return;
       }
 
