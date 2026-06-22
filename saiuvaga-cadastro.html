@@ -112,9 +112,11 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
 .trust-badge { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; text-align: center; }
 .trust-badge-ico { font-size: 16px; line-height: 1; }
 .trust-badge-text { font-size: 10px; font-weight: 600; color: var(--gdk); line-height: 1.25; }
+.wpp-alt-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 1.5px solid #25d366; border-radius: var(--r); color: #25d366; font-size: 14px; font-weight: 600; text-decoration: none; margin-top: 10px; background: #f0fdf4; }
 .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .mobile-proof { display: none; }
+@keyframes fadeInOv { from { opacity:0 } to { opacity:1 } }
 @media (max-width: 768px) {
   .container { grid-template-columns: 1fr; }
   .left { display: none; }
@@ -220,6 +222,9 @@ input:-webkit-autofill:focus {
     <div class="mobile-proof">
       <div class="hero-tag"><div class="pulse"></div>1.247 imóveis monitorados agora</div>
       <div class="mp-title">A vaga que você quer <em>avisa você</em> em segundos</div>
+      <div id="ad-trial-banner" style="display:none; background:#fff8e1; border:1.5px solid #f59e0b; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; color:#92400e; line-height:1.5;">
+        <strong>🎁 Oferta exclusiva do anúncio:</strong> seu trial de 7 dias começa automaticamente ao criar a conta — sem precisar inserir cartão ou código.
+      </div>
       <div class="mp-wapp" onclick="document.getElementById('reg-nome').scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>document.getElementById('reg-nome').focus(),350)">
         <div class="mp-wapp-bar"><div class="mp-wapp-av">&#127968;</div><div><div class="mp-wapp-name">SaiuVaga</div><div class="mp-wapp-status">em linha</div></div></div>
         <div class="mp-wapp-body">
@@ -266,7 +271,6 @@ input:-webkit-autofill:focus {
       <div id="view-cadastrar">
         <div class="field"><label>Nome completo</label><input type="text" id="reg-nome" placeholder="Seu nome completo" autocomplete="name"></div>
         <div class="field"><label>E-mail</label><input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email"></div>
-        <div class="field"><label>Senha</label><input type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" autocomplete="off"></div>
 
         <div class="trust-badges">
           <div class="trust-badge"><div class="trust-badge-ico">💳</div><div class="trust-badge-text">Sem cartão<br>de crédito</div></div>
@@ -278,7 +282,13 @@ input:-webkit-autofill:focus {
           <div class="spinner" id="spin1"></div>
           <span id="btn1-text">Começar grátis por 7 dias &rarr;</span>
         </button>
-        <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>.</p>
+
+        <a href="https://wa.me/5511984207437?text=Oi!+Vi+o+an%C3%BAncio+e+quero+receber+alertas+de+apartamentos+em+SP+%F0%9F%8F%A0" class="wpp-alt-btn" target="_blank">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          Prefiro ativar pelo WhatsApp
+        </a>
+
+        <p class="hint">Ao criar, você aceita os <a href="termos.html" target="_blank">Termos de uso</a> e a <a href="termos.html#s8" target="_blank">Política de Privacidade</a>. Você receberá um e-mail com sua senha temporária.</p>
         <p class="hint"><a href="saiuvaga-pagamento.html">Já sei o que quero — ver planos pagos →</a></p>
       </div>
 
@@ -296,7 +306,7 @@ input:-webkit-autofill:focus {
     <div class="success-view" id="success-view">
       <div class="success-ico">&#10003;</div>
       <div class="success-title" id="suc-title">Conta criada!</div>
-      <div class="success-sub" id="suc-sub">Você vai receber alertas no WhatsApp assim que surgir uma vaga com seus critérios.</div>
+      <div class="success-sub" id="suc-sub">Você vai receber alertas no WhatsApp assim que surgir uma vaga com seus critérios. Sua senha temporária foi enviada pro seu e-mail.</div>
       <div class="wapp-preview">
         <div class="wapp-bar"><div class="wapp-av">&#127968;</div><div class="wapp-info"><div class="wapp-name">SaiuVaga</div><div class="wapp-status">em linha</div></div></div>
         <div class="wapp-body">
@@ -463,12 +473,14 @@ async function fetchComRetry(url, options, tentativas = 2, timeoutMs = 8000) {
 async function cadastrar() {
   const nome  = (document.getElementById('reg-nome')?.value || '').trim();
   const email = (document.getElementById('reg-email')?.value || '').trim();
-  const pass  = (document.getElementById('reg-pass')?.value || '');
 
   if (!nome) { showError('Preencha o nome completo.', 'erro', 'reg-nome'); return; }
   if (!email) { showError('Preencha o e-mail.', 'erro', 'reg-email'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('Digite um e-mail válido.', 'erro', 'reg-email'); return; }
-  if (!pass || pass.length < 8) { showError('Senha deve ter mínimo 8 caracteres.', 'erro', 'reg-pass'); return; }
+
+  // Gera senha automática forte
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  const pass = Array.from({length: 12}, () => chars[Math.floor(Math.random() * chars.length)]).join('') + '1Sv!';
   setLoading('btn-cadastrar','spin1',true); hideError();
   let data, error;
   try {
@@ -686,6 +698,95 @@ async function forgotPass() {
   buscar();
   setInterval(buscar, 30000);
 })();
+
+// Detecta visitante vindo de anúncio e mostra banner de trial
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const isAd = params.get('utm_medium') === 'paid' || params.get('utm_source') === 'instagram' ||
+               params.get('utm_source') === 'facebook' || params.get('utm_medium') === 'cpc' ||
+               params.get('fbclid') || params.get('utm_campaign');
+  if (isAd) {
+    const banner = document.getElementById('ad-trial-banner');
+    if (banner) banner.style.display = 'block';
+  }
+})();
+
+// Modal de urgência — aparece após 20s pra visitante que não interagiu com o formulário
+(function urgencyModal() {
+  let shown = false;
+  let interacted = false;
+
+  // Se já interagiu com o form, não mostra
+  document.getElementById('reg-nome')?.addEventListener('focus', () => interacted = true);
+  document.getElementById('reg-email')?.addEventListener('focus', () => interacted = true);
+
+  function showModal() {
+    if (shown || interacted) return;
+    shown = true;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'urgency-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:flex-end;justify-content:center;animation:fadeInOv .3s ease';
+
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;position:relative">
+        <button onclick="document.getElementById('urgency-overlay').remove()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;color:#999;cursor:pointer">✕</button>
+        <div style="width:40px;height:4px;background:#ddd;border-radius:99px;margin:0 auto 20px"></div>
+        <div style="font-size:13px;font-weight:600;color:#1D9E75;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚡ Antes que alguém alugue</div>
+        <div style="font-size:20px;font-weight:800;color:#0D110F;line-height:1.2;margin-bottom:6px;letter-spacing:-.02em">Vagas em SP saem em minutos</div>
+        <div style="font-size:13px;color:#6B7570;margin-bottom:20px;line-height:1.5">Coloque seu e-mail abaixo e ative o alerta agora. 7 dias grátis, sem cartão.</div>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="modal-email" placeholder="seu@email.com" style="flex:1;padding:12px 14px;border:1.5px solid #DDE4DE;border-radius:10px;font-size:14px;outline:none" />
+          <button onclick="ativarModalTrial()" style="background:#1D9E75;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Ativar →</button>
+        </div>
+        <div id="modal-msg" style="font-size:12px;color:#6B7570;margin-top:10px;text-align:center"></div>
+        <div style="text-align:center;margin-top:14px">
+          <a href="https://wa.me/5511984207437?text=Oi!+Quero+receber+alertas+de+apartamentos+em+SP" style="font-size:12px;color:#1D9E75;text-decoration:none;font-weight:600">📱 Prefiro pelo WhatsApp</a>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    setTimeout(() => document.getElementById('modal-email')?.focus(), 100);
+  }
+
+  // Mostra após 20 segundos
+  setTimeout(showModal, 20000);
+
+  // Também mostra no exit intent (mouse saindo no topo — desktop)
+  document.addEventListener('mouseleave', e => { if (e.clientY < 10) showModal(); });
+})();
+
+async function ativarModalTrial() {
+  const email = (document.getElementById('modal-email')?.value || '').trim();
+  const msg = document.getElementById('modal-msg');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (msg) msg.textContent = 'Digite um e-mail válido.'; return;
+  }
+  if (msg) { msg.textContent = 'Criando sua conta...'; msg.style.color = '#1D9E75'; }
+
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#';
+  const pass = Array.from({length:12}, () => chars[Math.floor(Math.random()*chars.length)]).join('') + '1Sv!';
+
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { full_name: '' }, emailRedirectTo: 'https://saiuvaga.com.br/confirmado.html' } });
+  if (error) {
+    if (error.message?.includes('already')) {
+      if (msg) { msg.textContent = 'E-mail já cadastrado! Faça login.'; msg.style.color = '#e53e3e'; }
+    } else {
+      if (msg) { msg.textContent = 'Erro: ' + error.message; msg.style.color = '#e53e3e'; }
+    }
+    return;
+  }
+  if (data.user) {
+    try {
+      await fetch('https://saiuvaga-production.up.railway.app/api/cadastro/completar', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ user_id: data.user.id, email, nome: '', plano: 'trial' })
+      });
+    } catch(e) {}
+    if (msg) { msg.textContent = '✅ Trial ativado! Verifique seu e-mail.'; msg.style.color = '#1D9E75'; }
+    setTimeout(() => window.location.href = 'confirmado.html', 1500);
+  }
+}
 </script>
 </body>
 </html>
