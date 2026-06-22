@@ -183,6 +183,22 @@ app.get('/', (req, res) => res.json({
   zapi_instance: ZAPI_INSTANCE ? '✅ configurado' : '❌ faltando'
 }));
 
+// -- Imóveis recentes (público, sem auth) ---------------------
+app.get('/api/imoveis/recentes', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('imoveis')
+      .select('titulo, preco, bairro, tipo, encontrado_em')
+      .order('encontrado_em', { ascending: false })
+      .limit(5);
+    if (error) throw error;
+    res.json({ ok: true, imoveis: data || [] });
+  } catch (err) {
+    res.status(500).json({ ok: false, erro: err.message });
+  }
+});
+
 // -- Webhook Z-API - receber mensagens ------------------------
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
