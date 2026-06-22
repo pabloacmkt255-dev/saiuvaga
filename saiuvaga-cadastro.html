@@ -132,7 +132,8 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); min-height: 100v
   .mobile-proof .mp-av { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; background: #1D9E75; }
   .mobile-proof .mp-text { font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
   .mobile-proof .mp-name { font-size: 10.5px; color: var(--ink3); font-weight: 500; margin-top: 3px; }
-  .mobile-proof .mp-wapp { background: #ECE5DD; border-radius: var(--r); overflow: hidden; margin-bottom: 12px; }
+  .mobile-proof .mp-wapp { background: #ECE5DD; border-radius: var(--r); overflow: hidden; margin-bottom: 12px; cursor: pointer; transition: transform .15s ease; }
+  .mobile-proof .mp-wapp:active { transform: scale(0.98); }
   .mobile-proof .mp-wapp-bar { background: #075E54; padding: 8px 12px; display: flex; align-items: center; gap: 7px; }
   .mobile-proof .mp-wapp-av { width: 22px; height: 22px; border-radius: 50%; background: #128C7E; display: flex; align-items: center; justify-content: center; font-size: 11px; }
   .mobile-proof .mp-wapp-name { font-size: 11px; font-weight: 600; color: #fff; }
@@ -208,7 +209,7 @@ input:-webkit-autofill:focus {
     <div class="mobile-proof">
       <div class="hero-tag"><div class="pulse"></div>1.247 imóveis monitorados agora</div>
       <div class="mp-title">A vaga que você quer <em>avisa você</em> em segundos</div>
-      <div class="mp-wapp">
+      <div class="mp-wapp" onclick="document.getElementById('reg-nome').scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>document.getElementById('reg-nome').focus(),350)">
         <div class="mp-wapp-bar"><div class="mp-wapp-av">&#127968;</div><div><div class="mp-wapp-name">SaiuVaga</div><div class="mp-wapp-status">em linha</div></div></div>
         <div class="mp-wapp-body">
           <div class="mp-bubble">
