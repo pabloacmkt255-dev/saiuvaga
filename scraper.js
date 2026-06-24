@@ -2065,7 +2065,7 @@ async function buscarOLX(bairro, region) {
   // Circuit breakers separados: ZAP bloqueado não penaliza VivaReal
   const needZap = zapTotal === 0 && circuitAllows('puppeteerZap');
   const needVr  = vrTotal === 0  && circuitAllows('puppeteerVr');
-  if ((needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) {
+  if (false && (needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) { // DESABILITADO — muito caro (-11/GB)
     console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro}...`);
     try {
       const puppeteerResult = await buscarZapEVivaRealPuppeteer(bairro);
@@ -2278,15 +2278,18 @@ async function rodarScraper() {
   const bairrosComAlerta = new Set();
   (usuarios || []).forEach(u => (u.alerta_bairros || []).forEach(b => bairrosComAlerta.add(b)));
 
+  // Limita a 5 bairros por ciclo para economizar proxy (rotação)
+  const MAX_BAIRROS_POR_CICLO = 5;
   let bairrosParaBuscar;
   if (bairrosComAlerta.size > 0) {
-    // Busca apenas bairros que têm alertas configurados
     bairrosParaBuscar = [...bairrosComAlerta].map(b => ({ bairro: b, region: toSlug(b) }));
     console.log(`   📋 Bairros com alertas: ${[...bairrosComAlerta].join(', ')}`);
   } else {
-    // Sem alertas — usa lista fixa mínima para popular o banco
-    bairrosParaBuscar = BUSCAS;
-    console.log(`   📋 Sem alertas — usando bairros padrão`);
+    // Rotação: a cada ciclo busca 5 bairros diferentes
+    const ciclo = Math.floor(Date.now() / (6 * 60 * 60 * 1000)) % Math.ceil(BUSCAS.length / MAX_BAIRROS_POR_CICLO);
+    const inicio = ciclo * MAX_BAIRROS_POR_CICLO;
+    bairrosParaBuscar = BUSCAS.slice(inicio, inicio + MAX_BAIRROS_POR_CICLO);
+    console.log(`   📋 Ciclo ${ciclo+1}: bairros ${bairrosParaBuscar.map(b=>b.bairro).join(', ')}`);
   }
 
   let totalEncontrados = 0;
@@ -2324,5 +2327,5 @@ async function rodarScraper() {
   console.log(`\n✅ Concluido! ${total} novos imoveis salvos.\n`);
 }
 
-cron.schedule('0 */4 * * *', rodarScraper); // 1x a cada 4h — preserva free tiers
+cron.schedule('0 */6 * * *', rodarScraper); // 1x a cada 6h — economiza proxy/BrightData
 rodarScraper();
