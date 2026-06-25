@@ -10,9 +10,9 @@
         y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "xaavz26i66");
 </script>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SaiuVaga — Alertas de imóveis no WhatsApp em tempo real</title>
+<meta name="description" content="Receba alertas de apartamentos para alugar em SP direto no WhatsApp antes de aparecer no ZAP e OLX. Monitora 104+ portais. 7 dias grátis, sem cartão.">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-W12FH3ZNDP"></script>
@@ -34,6 +34,10 @@ nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-co
 .nav-r a:hover{color:var(--g)}
 .nav-btn{height:38px;padding:0 20px;background:var(--g);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background .2s}
 .nav-btn:hover{background:var(--gdk)}
+/* SELOS DE CONFIANÇA */
+.trust-bar{background:var(--wh);border-top:1px solid var(--ln);border-bottom:1px solid var(--ln);padding:12px 48px;display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap}
+.trust-item{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink3)}
+.trust-item span{font-size:16px}
 .hero{padding:100px 48px 72px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;overflow:hidden;min-height:90vh;justify-content:center}
 .hero-bg{position:absolute;inset:0;z-index:0}
 .hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 55% at 15% 65%,rgba(29,158,117,.09) 0%,transparent 65%),radial-gradient(ellipse 60% 45% at 85% 25%,rgba(239,159,39,.07) 0%,transparent 65%)}
@@ -65,6 +69,10 @@ nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-co
 .orc-input::placeholder{color:var(--ink3)}
 .orc-btn{height:50px;padding:0 24px;background:var(--g);color:#fff;border:none;border-radius:var(--r);font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background .2s;white-space:nowrap}
 .orc-btn:hover{background:var(--gdk)}
+/* SELOS ABAIXO DO FORM */
+.trust-badges{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;justify-content:center}
+.trust-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink3);font-weight:500}
+.trust-badge span{font-size:13px}
 .hero-fine{font-size:12px;color:var(--ink3);margin-top:14px;animation:up .55s .4s ease both;text-align:center}
 .hero-fine span+span::before{content:'·';margin:0 8px}
 .live-feed{margin-top:56px;animation:up .55s .46s ease both;width:100%;max-width:820px}
@@ -168,6 +176,14 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--g);
 .btn-gr:hover{background:var(--gdk)}
 .btn-out{width:100%;height:44px;border:1.5px solid var(--ln);border-radius:var(--r);background:transparent;color:var(--ink);font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:border-color .2s,color .2s}
 .btn-out:hover{border-color:var(--g);color:var(--g)}
+/* SEÇÃO LGPD/CONFIANÇA */
+.lgpd-section{background:var(--glt);border-top:1px solid rgba(29,158,117,.2);border-bottom:1px solid rgba(29,158,117,.2);padding:40px 48px}
+.lgpd-inner{max-width:1080px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.lgpd-text h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:800;color:var(--gdk);margin-bottom:6px}
+.lgpd-text p{font-size:14px;color:var(--ink3);line-height:1.6;max-width:480px}
+.lgpd-badges{display:flex;gap:12px;flex-wrap:wrap}
+.lgpd-badge{background:var(--wh);border:1px solid rgba(29,158,117,.25);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--gdk)}
+.lgpd-badge span{font-size:20px}
 .faq-section{padding:96px 48px;max-width:720px;margin:0 auto;text-align:center}
 .faq-list{margin-top:0;text-align:left}
 .faq-item{border-bottom:1px solid var(--ln);padding:20px 0;cursor:pointer}
@@ -220,9 +236,11 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
   .proof{gap:20px;padding:20px}.cta-final{padding:64px 20px}
   footer{padding:40px 20px 24px}.ft-top{flex-direction:column}
   .pb-saiu{flex-direction:column;gap:14px;text-align:center}
+  .trust-bar{gap:16px;padding:12px 20px}
+  .lgpd-section{padding:32px 20px}.lgpd-inner{flex-direction:column}
+  .lgpd-badges{justify-content:center}
 }
 </style>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9785561385725903" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -238,9 +256,20 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
     <a href="#como-funciona">Como funciona</a>
     <a href="#orcamento">Or&ccedil;amento</a>
     <a href="#precos">Pre&ccedil;os</a>
+    <a href="#faq">FAQ</a>
+    <a href="politica-privacidade.html">Privacidade</a>
     <button class="nav-btn" onclick="abrirCadastro()">Ativar alertas gr&aacute;tis</button>
   </div>
 </nav>
+
+<!-- BARRA DE CONFIANÇA -->
+<div class="trust-bar">
+  <div class="trust-item"><span>🔒</span> Dados protegidos pela LGPD</div>
+  <div class="trust-item"><span>✅</span> Sem spam — s&oacute; alertas do seu bairro</div>
+  <div class="trust-item"><span>💳</span> Sem cart&atilde;o no trial de 7 dias</div>
+  <div class="trust-item"><span>🇧🇷</span> Produto 100% brasileiro</div>
+  <div class="trust-item"><span>🚫</span> Cancela quando quiser</div>
+</div>
 
 <div class="hero">
   <div class="hero-bg"></div>
@@ -267,7 +296,13 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
       <input id="hero-orcamento" type="text" class="orc-input" placeholder="Or&ccedil;amento m&aacute;x. &mdash; R$ 2.000" oninput="mascaraOrcamento(this)">
       <button class="orc-btn" onclick="ativarAlerta()">Quero alertas gr&aacute;tis &rarr;</button>
     </div>
-    <p class="hero-fine"><span>7 dias gr&aacute;tis</span><span>Sem cart&atilde;o</span><span>Cancela quando quiser</span></p>
+    <div class="trust-badges">
+      <div class="trust-badge"><span>🔒</span> LGPD</div>
+      <div class="trust-badge"><span>✅</span> 7 dias gr&aacute;tis</div>
+      <div class="trust-badge"><span>💳</span> Sem cart&atilde;o</div>
+      <div class="trust-badge"><span>🚫</span> Sem spam</div>
+      <div class="trust-badge"><span>❌</span> Cancela quando quiser</div>
+    </div>
   </div>
   <div class="live-feed">
     <div class="live-label"><span class="live-dot"></span>&uacute;ltimas vagas monitoradas</div>
@@ -420,6 +455,22 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
   </div>
 </div>
 
+<!-- SEÇÃO LGPD/CONFIANÇA -->
+<div class="lgpd-section">
+  <div class="lgpd-inner">
+    <div class="lgpd-text">
+      <h3>🔒 Seus dados est&atilde;o seguros</h3>
+      <p>O SaiuVaga segue rigorosamente a Lei Geral de Prote&ccedil;&atilde;o de Dados (LGPD). N&atilde;o vendemos, compartilhamos ou usamos seus dados para nada al&eacute;m de enviar os alertas que voc&ecirc; configurou.</p>
+    </div>
+    <div class="lgpd-badges">
+      <div class="lgpd-badge"><span>🛡️</span> LGPD Compliance</div>
+      <div class="lgpd-badge"><span>🔐</span> Dados criptografados</div>
+      <div class="lgpd-badge"><span>🚫</span> Sem venda de dados</div>
+      <div class="lgpd-badge"><span>📵</span> Sem spam garantido</div>
+    </div>
+  </div>
+</div>
+
 <div class="faq-section" id="faq">
   <div class="tag">FAQ</div>
   <h2>Perguntas<br>frequentes</h2>
@@ -428,6 +479,7 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
     <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>Como recebo os alertas?</span><span class="faq-ico">+</span></div><div class="faq-a">Diretamente no seu WhatsApp. Voc&ecirc; cadastra seu or&ccedil;amento e bairro no site, e os alertas chegam automaticamente &mdash; sem instalar app.</div></div>
     <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>O SaiuVaga respeita meu or&ccedil;amento?</span><span class="faq-ico">+</span></div><div class="faq-a">Sim. Voc&ecirc; define o valor m&aacute;ximo que quer pagar e o SaiuVaga s&oacute; te avisa quando surgir um im&oacute;vel dentro desse limite. Sem spam de im&oacute;veis fora do seu bolso.</div></div>
     <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>Quais plataformas voc&ecirc;s monitoram?</span><span class="faq-ico">+</span></div><div class="faq-a">OLX, Zap Im&oacute;veis, Viva Real, Quinto Andar, Im&oacute;velWeb e mais 100 fontes em SP. Novos portais s&atilde;o adicionados regularmente.</div></div>
+    <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>Meus dados ficam seguros?</span><span class="faq-ico">+</span></div><div class="faq-a">Sim. O SaiuVaga segue a LGPD. Seus dados (nome, e-mail, WhatsApp) s&atilde;o usados exclusivamente para enviar os alertas que voc&ecirc; configurou. N&atilde;o vendemos nem compartilhamos com terceiros.</div></div>
     <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>Qual a diferen&ccedil;a do trial para o pago?</span><span class="faq-ico">+</span></div><div class="faq-a">No trial voc&ecirc; tem 7 dias completos com alertas ilimitados em tempo real &mdash; sem cart&atilde;o. Depois, o plano Mensal por R$19 mant&eacute;m tudo ativo sem interrup&ccedil;&atilde;o.</div></div>
     <div class="faq-item" onclick="toggleFaq(this)"><div class="faq-q"><span>Posso cancelar quando quiser?</span><span class="faq-ico">+</span></div><div class="faq-a">Sim. Basta enviar PARAR no WhatsApp. Sem liga&ccedil;&atilde;o de reten&ccedil;&atilde;o, sem burocracia, sem multa.</div></div>
   </div>
@@ -440,7 +492,7 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
     <input type="tel" class="cta-inp" id="cta-wpp" placeholder="Seu WhatsApp">
     <button class="btn-wh" onclick="ativarFinal()">Ativar alertas gr&aacute;tis &rarr;</button>
   </div>
-  <p class="cta-fine">7 dias gr&aacute;tis &middot; Sem cart&atilde;o &middot; Cancela quando quiser</p>
+  <p class="cta-fine">7 dias gr&aacute;tis &middot; Sem cart&atilde;o &middot; Cancela quando quiser &middot; LGPD</p>
 </div>
 
 <footer>
@@ -453,12 +505,12 @@ footer{background:var(--ink);padding:56px 48px 28px;display:flex;flex-direction:
       <p>Alertas em tempo real para im&oacute;veis residenciais e comerciais em S&atilde;o Paulo.</p>
     </div>
     <div class="ft-col"><h4>Produto</h4><a href="#como-funciona">Como funciona</a><a href="#orcamento">Or&ccedil;amento</a><a href="#precos">Pre&ccedil;os</a><a href="#faq">FAQ</a></div>
-    <div class="ft-col"><h4>Segmentos</h4><a href="saiuvaga-cadastro.html">Residencial</a><a href="saiuvaga-cadastro.html">Comercial</a><a href="saiuvaga-cadastro.html">Escrit&oacute;rio</a><a href="https://wa.me/5511984207437?text=Ol%C3%A1%2C%20quero%20saber%20sobre%20o%20plano%20para%20corretores" target="_blank">Corretores</a></div>
-    <div class="ft-col"><h4>Empresa</h4><a href="https://wa.me/5511984207437?text=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20o%20SaiuVaga" target="_blank">Sobre</a><a href="saiuvaga-cadastro.html">Cadastrar</a><a href="saiuvaga-pagamento.html">Planos</a><a href="mailto:saiuvagaoficial@gmail.com">Contato</a></div>
+    <div class="ft-col"><h4>Bairros</h4><a href="/apartamentos-pinheiros">Pinheiros</a><a href="/apartamentos-vila-madalena">Vila Madalena</a><a href="/apartamentos-moema">Moema</a><a href="/apartamentos-itaim-bibi">Itaim Bibi</a><a href="/apartamentos-jardins">Jardins</a></div>
+    <div class="ft-col"><h4>Legal</h4><a href="politica-privacidade.html">Pol&iacute;tica de Privacidade</a><a href="termos.html">Termos de Uso</a><a href="termos.html#lgpd">LGPD</a><a href="mailto:saiuvagaoficial@gmail.com">Contato</a></div>
   </div>
   <div class="ft-btm">
-    <p>&copy; 2026 A7 Comercial Ltda &mdash; SaiuVaga. Todos os direitos reservados.</p>
-    <p><a href="termos.html">Privacidade</a> &middot; <a href="termos.html">Termos</a> &middot; <a href="termos.html#s8">LGPD</a></p>
+    <p>&copy; 2026 A7 Comercial Ltda &mdash; SaiuVaga. Todos os direitos reservados. CNPJ: 00.000.000/0001-00</p>
+    <p><a href="politica-privacidade.html">Privacidade</a> &middot; <a href="termos.html">Termos</a> &middot; <a href="termos.html#lgpd">LGPD</a></p>
   </div>
 </footer>
 
