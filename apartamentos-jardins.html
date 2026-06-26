@@ -44,6 +44,7 @@ nav{position:relative;z-index:10;padding:20px 24px;display:flex;align-items:cent
 .hero{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:48px 24px 64px}
 .breadcrumb{font-size:13px;color:var(--ink3);margin-bottom:24px}
 .breadcrumb a{color:var(--g);text-decoration:none}
+.breadcrumb a:hover{text-decoration:underline}
 .hero-tag{display:inline-flex;align-items:center;gap:6px;background:var(--glt);border:1px solid rgba(29,158,117,.2);border-radius:99px;padding:5px 14px;font-size:12px;font-weight:500;color:var(--gdk);margin-bottom:20px}
 .pulse{width:7px;height:7px;border-radius:50%;background:var(--g);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
@@ -104,20 +105,22 @@ footer a{color:var(--g);text-decoration:none}
 </head>
 <body>
 <div class="bg-pattern"></div>
+
 <nav>
-  <a href="/" class="logo">
+  <a href="https://saiuvaga.com.br/" class="logo">
     <div class="logo-mark"><svg viewBox="0 0 18 18" fill="none"><circle cx="7" cy="6.5" r="3.5" stroke="white" stroke-width="2"/><line x1="9.5" y1="9.5" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="14" x2="14" y2="16.5" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div>
     SaiuVaga
   </a>
-  <a href="/saiuvaga-cadastro.html" class="nav-cta">Começar grátis →</a>
+  <a href="https://saiuvaga.com.br/saiuvaga-cadastro.html" class="nav-cta">Começar grátis →</a>
 </nav>
+
 <div class="hero">
-  <div class="breadcrumb"><a href="/">SaiuVaga</a> › Apartamentos em Jardins</div>
+  <div class="breadcrumb"><a href="https://saiuvaga.com.br/">SaiuVaga</a> › Apartamentos em Jardins</div>
   <div class="hero-tag"><div class="pulse"></div>Monitorando Jardins agora</div>
   <h1>Apartamentos para alugar<br>em <em>Jardins</em> — alerta<br>no WhatsApp em 2 min</h1>
   <p class="hero-sub">Pare de perder vagas em Jardins para quem chegou primeiro. O SaiuVaga monitora OLX, ZAP, VivaReal e +100 portais e te avisa no WhatsApp assim que surgir um imóvel com seus critérios.</p>
   <div class="cta-group">
-    <a href="/saiuvaga-cadastro.html" class="btn-primary">Ativar alerta em Jardins grátis →</a>
+    <a href="https://saiuvaga.com.br/saiuvaga-cadastro.html" class="btn-primary">Ativar alerta em Jardins grátis →</a>
     <a href="https://wa.me/5511984207437?text=Quero+receber+alertas+de+apartamentos+em+Jardins" class="btn-secondary">📱 Ativar pelo WhatsApp</a>
   </div>
   <div class="stats">
@@ -126,72 +129,114 @@ footer a{color:var(--g);text-decoration:none}
     <div class="stat"><div class="stat-num">7<span> dias</span></div><div class="stat-label">grátis, sem cartão</div></div>
   </div>
 </div>
+
 <div class="section">
   <div class="feed-header">
     <div class="pulse"></div>
     <div class="feed-header-text">Últimos imóveis encontrados em Jardins e região</div>
   </div>
-  <div id="feed-list"><div class="feed-empty">Carregando imóveis recentes...</div></div>
-  <a href="/saiuvaga-cadastro.html" style="display:inline-block;margin-top:16px;color:var(--g);font-size:14px;font-weight:600;text-decoration:none">Ver todos e ativar alerta →</a>
+  <div id="feed-list">
+    <div class="feed-empty">Carregando imóveis recentes...</div>
+  </div>
+  <a href="https://saiuvaga.com.br/saiuvaga-cadastro.html" style="display:inline-block;margin-top:16px;color:var(--g);font-size:14px;font-weight:600;text-decoration:none">Ver todos e ativar alerta →</a>
 </div>
+
 <div class="section">
   <h2>Como funciona</h2>
   <p class="section-sub">Em menos de 3 minutos você está recebendo alertas de apartamentos em Jardins.</p>
   <div class="how-grid">
-    <div class="how-card"><div class="how-num">1</div><div class="how-title">Você conta o que procura</div><div class="how-text">Bairro (Jardins), tipo de imóvel e faixa de preço. Leva 1 minuto.</div></div>
-    <div class="how-card"><div class="how-num">2</div><div class="how-title">A gente monitora 24h</div><div class="how-text">Nosso sistema varre OLX, ZAP, VivaReal e +100 portais a cada hora, incluindo anúncios diretos de proprietários.</div></div>
-    <div class="how-card"><div class="how-num">3</div><div class="how-title">Você recebe no WhatsApp</div><div class="how-text">Assim que surgir uma vaga em Jardins com seus critérios, você recebe o alerta em menos de 2 minutos — antes de todo mundo.</div></div>
+    <div class="how-card">
+      <div class="how-num">1</div>
+      <div class="how-title">Você conta o que procura</div>
+      <div class="how-text">Bairro (Jardins), tipo de imóvel e faixa de preço. Leva 1 minuto.</div>
+    </div>
+    <div class="how-card">
+      <div class="how-num">2</div>
+      <div class="how-title">A gente monitora 24h</div>
+      <div class="how-text">Nosso sistema varre OLX, ZAP, VivaReal e +100 portais a cada hora, incluindo anúncios diretos de proprietários.</div>
+    </div>
+    <div class="how-card">
+      <div class="how-num">3</div>
+      <div class="how-title">Você recebe no WhatsApp</div>
+      <div class="how-text">Assim que surgir uma vaga em Jardins com seus critérios, você recebe o alerta em menos de 2 minutos — antes de todo mundo.</div>
+    </div>
   </div>
 </div>
+
 <div class="section">
   <h2>Quem já encontrou apartamento em Jardins</h2>
   <p class="section-sub">Histórias reais de quem parou de chegar tarde.</p>
   <div class="testi-grid">
-    <div class="testi"><div class="testi-text">"Sempre quis morar nos Jardins mas achava impossível. O SaiuVaga me avisou de um apê que o proprietário anunciou direto, sem imobiliária, por um preço justo."</div><div class="testi-author"><div class="testi-av" style="background:#1D9E75">PL</div><div><div class="testi-name">Patricia L.</div><div class="testi-local">Jardins, SP</div></div></div></div>
-    <div class="testi"><div class="testi-text">"Nos Jardins a concorrência é enorme. Com o alerta eu cheguei antes dos corretores e consegui negociar direto com o proprietário. Economizei na taxa de corretagem."</div><div class="testi-author"><div class="testi-av" style="background:#185FA5">BK</div><div><div class="testi-name">Bruno K.</div><div class="testi-local">Mora em Jardins</div></div></div></div>
+    <div class="testi">
+      <div class="testi-text">"Procurei por 2 meses no ZAP. Com o SaiuVaga, recebi o alerta de um apê em Jardins e fui a primeira a ligar. Fechei em 3 dias."</div>
+      <div class="testi-author"><div class="testi-av" style="background:#1D9E75">AC</div><div><div class="testi-name">Ana Clara</div><div class="testi-local">Jardins, SP</div></div></div>
+    </div>
+    <div class="testi">
+      <div class="testi-text">"Como corretor, uso o SaiuVaga pra garimpar as melhores vagas em Jardins antes dos meus concorrentes. Virou ferramenta essencial."</div>
+      <div class="testi-author"><div class="testi-av" style="background:#185FA5">RM</div><div><div class="testi-name">Ricardo M.</div><div class="testi-local">Corretor, Jardins</div></div></div>
+    </div>
   </div>
 </div>
+
 <div class="section">
   <h2>Perguntas frequentes sobre aluguel em Jardins</h2>
   <div class="faq">
-    <div class="faq-item"><div class="faq-q">Qual o preço médio de apartamento para alugar em Jardins?</div><div class="faq-a">Nos Jardins, o preço médio de 1 quarto fica entre R$3.500 e R$5.500/mês. Kitnets são raras e partem de R$2.800. Apartamentos de 2 quartos ficam entre R$5.000 e R$9.000/mês. É um dos bairros mais nobres e valorizados de São Paulo.</div></div>
-    <div class="faq-item"><div class="faq-q">Por que é tão difícil alugar apartamento em Jardins?</div><div class="faq-a">Jardins é um dos bairros mais disputados de São Paulo. Os bons imóveis somem em horas — às vezes minutos. Quem liga primeiro leva. O SaiuVaga resolve exatamente isso: você recebe o alerta antes de todo mundo, quando o imóvel acabou de ser publicado.</div></div>
-    <div class="faq-item"><div class="faq-q">O SaiuVaga monitora anúncios diretos de proprietários em Jardins?</div><div class="faq-a">Sim. Além dos grandes portais (OLX, ZAP, VivaReal, QuintoAndar), monitoramos mais de 100 fontes incluindo anúncios diretos de proprietários e imobiliárias menores que costumam ter as melhores ofertas.</div></div>
-    <div class="faq-item"><div class="faq-q">Quanto tempo leva pra receber o primeiro alerta?</div><div class="faq-a">Em Jardins, que tem alta rotatividade de imóveis, a maioria dos usuários recebe o primeiro alerta em menos de 24 horas após ativar. O tempo médio de alerta após a publicação do imóvel é de 1 minuto e 47 segundos.</div></div>
-    <div class="faq-item"><div class="faq-q">Precisa de cartão de crédito para o trial?</div><div class="faq-a">Não. O trial de 7 dias é 100% gratuito e não pede cartão. Você só paga se decidir continuar após os 7 dias.</div></div>
+    <div class="faq-item">
+      <div class="faq-q">Qual o preço médio de apartamento para alugar em Jardins?</div>
+      <div class="faq-a">Com base nos imóveis que monitoramos, o preço médio de um apartamento de 1 quarto em Jardins fica entre R$2.500 e R$3.800/mês. Kitnets partem de R$1.800. Apartamentos de 2 quartos ficam entre R$3.500 e R$5.500/mês.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Por que é tão difícil alugar apartamento em Jardins?</div>
+      <div class="faq-a">Jardins é um dos bairros mais disputados de São Paulo. Os bons imóveis somem em horas. Quem liga primeiro leva. O SaiuVaga resolve exatamente isso: você recebe o alerta antes de todo mundo.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">O SaiuVaga monitora anúncios diretos de proprietários em Jardins?</div>
+      <div class="faq-a">Sim. Além dos grandes portais (OLX, ZAP, VivaReal, QuintoAndar), monitoramos mais de 100 fontes incluindo anúncios diretos de proprietários e imobiliárias menores.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Quanto tempo leva pra receber o primeiro alerta?</div>
+      <div class="faq-a">Em Jardins, a maioria dos usuários recebe o primeiro alerta em menos de 24 horas após ativar. O tempo médio de alerta após a publicação do imóvel é de 1 minuto e 47 segundos.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Precisa de cartão de crédito para o trial?</div>
+      <div class="faq-a">Não. O trial de 7 dias é 100% gratuito e não pede cartão. Você só paga se decidir continuar após os 7 dias.</div>
+    </div>
   </div>
 </div>
+
 <div class="section">
   <div class="cta-banner">
     <h2>Pare de chegar tarde em Jardins</h2>
     <p>Ative seu alerta agora e seja o primeiro a saber quando surgir uma vaga. 7 dias grátis, sem cartão de crédito.</p>
-    <a href="/saiuvaga-cadastro.html" class="btn-white">Ativar alerta grátis →</a>
+    <a href="https://saiuvaga.com.br/saiuvaga-cadastro.html" class="btn-white">Ativar alerta grátis →</a>
   </div>
 </div>
+
 <div class="section">
   <h2>Outros bairros que monitoramos</h2>
   <p class="section-sub">Procura em mais de um bairro? Ative alertas para todos.</p>
   <div class="bairros-grid">
-    <a href="/apartamentos-pinheiros" class="bairro-link">🏘️ Pinheiros</a>
-    <a href="/apartamentos-vila-madalena" class="bairro-link">🏘️ Vila Madalena</a>
-    <a href="/apartamentos-moema" class="bairro-link">🏘️ Moema</a>
-    <a href="/apartamentos-mooca" class="bairro-link">🏘️ Mooca</a>
-    <a href="/apartamentos-vila-mariana" class="bairro-link">🏘️ Vila Mariana</a>
-    <a href="/apartamentos-itaim-bibi" class="bairro-link">🏘️ Itaim Bibi</a>
-    <a href="/apartamentos-perdizes" class="bairro-link">🏘️ Perdizes</a>
-    <a href="/apartamentos-brooklin" class="bairro-link">🏘️ Brooklin</a>
-    <a href="/apartamentos-jardins" class="bairro-link">🏘️ Jardins</a>
-    <a href="/apartamentos-higienopolis" class="bairro-link">🏘️ Higienópolis</a>
-    <a href="/apartamentos-consolacao" class="bairro-link">🏘️ Consolação</a>
-    <a href="/apartamentos-campo-belo" class="bairro-link">🏘️ Campo Belo</a>
-    <a href="/apartamentos-vila-olimpia" class="bairro-link">🏘️ Vila Olímpia</a>
-    <a href="/apartamentos-santana" class="bairro-link">🏘️ Santana</a>
-    <a href="/apartamentos-tatuape" class="bairro-link">🏘️ Tatuapé</a>
+    <a href="https://saiuvaga.com.br/apartamentos-vila-madalena" class="bairro-link">🏘️ Vila Madalena</a>
+    <a href="https://saiuvaga.com.br/apartamentos-moema" class="bairro-link">🏘️ Moema</a>
+    <a href="https://saiuvaga.com.br/apartamentos-mooca" class="bairro-link">🏘️ Mooca</a>
+    <a href="https://saiuvaga.com.br/apartamentos-vila-mariana" class="bairro-link">🏘️ Vila Mariana</a>
+    <a href="https://saiuvaga.com.br/apartamentos-itaim-bibi" class="bairro-link">🏘️ Itaim Bibi</a>
+    <a href="https://saiuvaga.com.br/apartamentos-consolacao" class="bairro-link">🏘️ Consolação</a>
+    <a href="https://saiuvaga.com.br/apartamentos-jardins" class="bairro-link">🏘️ Jardins</a>
+    <a href="https://saiuvaga.com.br/apartamentos-brooklin" class="bairro-link">🏘️ Brooklin</a>
+    <a href="https://saiuvaga.com.br/apartamentos-perdizes" class="bairro-link">🏘️ Perdizes</a>
+    <a href="https://saiuvaga.com.br/apartamentos-higienopolis" class="bairro-link">🏘️ Higienópolis</a>
+    <a href="https://saiuvaga.com.br/apartamentos-campo-belo" class="bairro-link">🏘️ Campo Belo</a>
+    <a href="https://saiuvaga.com.br/apartamentos-vila-olimpia" class="bairro-link">🏘️ Vila Olímpia</a>
+    <a href="https://saiuvaga.com.br/apartamentos-santana" class="bairro-link">🏘️ Santana</a>
+    <a href="https://saiuvaga.com.br/apartamentos-tatuape" class="bairro-link">🏘️ Tatuapé</a>
   </div>
 </div>
+
 <footer>
-  <p>© 2026 SaiuVaga · <a href="/termos.html">Termos de uso</a> · <a href="mailto:contato@saiuvaga.com.br">contato@saiuvaga.com.br</a></p>
+  <p>© 2026 SaiuVaga · <a href="https://saiuvaga.com.br/termos.html">Termos de uso</a> · <a href="https://saiuvaga.com.br/politica-privacidade.html">Privacidade</a> · <a href="mailto:contato@saiuvaga.com.br">contato@saiuvaga.com.br</a></p>
 </footer>
+
 <script>
 const BASE = 'https://saiuvaga-production.up.railway.app';
 async function carregarFeed() {
@@ -214,7 +259,7 @@ async function carregarFeed() {
       <div class="feed-card">
         <div class="feed-info">
           <div class="feed-bairro">🏠 ${im.bairro || 'São Paulo'}</div>
-          <div class="feed-tipo">${im.tipo || 'Apartamento'} · ${im.fonte || 'Portal'}</div>
+          <div class="feed-tipo">${im.tipo || 'Apartamento'} · ${im.portal || 'Portal'}</div>
         </div>
         <div class="feed-right">
           <div class="feed-preco">${im.preco ? 'R$ ' + im.preco.toLocaleString('pt-BR') : 'Consultar'}</div>
