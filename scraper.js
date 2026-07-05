@@ -1847,14 +1847,16 @@ async function buscarOLXResidentialProxy(bairro) {
 
   try {
     const { HttpsProxyAgent } = require('https-proxy-agent');
-    const agent = new HttpsProxyAgent(proxyUrl);
+    // BrightData residential proxy usa porta 33335 com SSL
+    const proxyUrlFixed = proxyUrl.replace('http://', 'https://');
+    const agent = new HttpsProxyAgent(proxyUrlFixed, { rejectUnauthorized: false });
     const { data: html } = await axios.get(targetUrl, {
       httpsAgent: agent,
+      proxy: false, // desabilita proxy padrão do axios, usa o agent
       headers: {
         'User-Agent': getRandomUA(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Cache-Control': 'no-cache',
       },
       timeout: 60000,
