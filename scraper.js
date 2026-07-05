@@ -1837,15 +1837,75 @@ async function buscarOLXWebUnlocker(bairro) {
   }
 }
 
-// Orquestra OLX: Web Unlocker primeiro (passa Cloudflare), depois Apify, depois ScraperAPI
+// Busca OLX via proxy residencial BrightData (fallback quando Web Unlocker e ScraperAPI falham)
+async function buscarOLXResidentialProxy(bairro) {
+  const proxyUrl = process.env.RESIDENTIAL_PROXY_URL;
+  if (!proxyUrl) return [];
+
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
+
+  try {
+    const { HttpsProxyAgent } = require('https-proxy-agent');
+    const agent = new HttpsProxyAgent(proxyUrl);
+    const { data: html } = await axios.get(targetUrl, {
+      httpsAgent: agent,
+      headers: {
+        'User-Agent': getRandomUA(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+      },
+      timeout: 60000,
+    });
+
+    const $ = cheerio.load(String(html));
+    const imoveis = [];
+
+    const nextData = $('script#__NEXT_DATA__').html();
+    if (nextData) {
+      try {
+        const parsed = JSON.parse(nextData);
+        const ads = parsed?.props?.pageProps?.ads
+          || parsed?.props?.pageProps?.listingProps?.ads || [];
+        ads.forEach(ad => {
+          const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
+          const link = ad.url || ad.linkUrl || '';
+          const titulo = ad.title || `Imovel OLX - ${bairro}`;
+          if (preco > 0 && link.length > 20) {
+            imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+          }
+        });
+      } catch (pe) {
+        console.log(`   ⚠️  OLX ResProxy parse falhou: ${pe.message?.slice(0,40)}`);
+      }
+    }
+
+    if (imoveis.length > 0) console.log(`   ✅ OLX ResProxy OK para ${bairro}: ${imoveis.length} imóveis`);
+    else console.log(`   __ OLX ResProxy: 0 imóveis para ${bairro}`);
+    return imoveis.filter(i => i.preco > 0 && i.preco <= 15000 && i.link?.length > 20);
+  } catch (e) {
+    console.log(`   __ OLX ResProxy falhou para ${bairro}: ${e.message?.slice(0, 60)}`);
+    return [];
+  }
+}
+
+// Orquestra OLX: Web Unlocker → ScraperAPI → Proxy Residencial
 async function buscarOLXHtml(bairro) {
+  // 1. Web Unlocker (BrightData)
   if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
     const result = await buscarOLXWebUnlocker(bairro);
     if (result.length > 0) return result;
   }
-  // Apify removido: bloqueado em todas as contas (cascata travava ~6-7min)
+  // 2. ScraperAPI (quando tem créditos)
   if (process.env.SCRAPERAPI_KEY) {
-    return buscarOLXScraperAPI(bairro);
+    const result = await buscarOLXScraperAPI(bairro);
+    if (result.length > 0) return result;
+  }
+  // 3. Proxy Residencial BrightData (fallback final)
+  if (process.env.RESIDENTIAL_PROXY_URL) {
+    return buscarOLXResidentialProxy(bairro);
   }
   return [];
 }
