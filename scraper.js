@@ -1341,11 +1341,35 @@ async function axiosProxy(url, headers = {}, timeout = 45000) {
   return axios.get(url, { headers, timeout });
 }
 
+// Mapeamento bairro -> zona usada pelo VivaReal nas URLs de busca
+// (nem sempre corresponde à divisão geográfica popular; "Faria Lima" é uma
+// avenida, não um bairro próprio no VivaReal — usamos jardim-paulistano
+// como aproximação mais próxima)
+const ZONA_VIVAREAL = {
+  'pinheiros': 'zona-oeste',
+  'vila-madalena': 'zona-oeste',
+  'perdizes': 'zona-oeste',
+  'jardins': 'zona-oeste',
+  'moema': 'zona-sul',
+  'itaim-bibi': 'zona-sul',
+  'brooklin': 'zona-sul',
+  'vila-mariana': 'zona-sul',
+  'vila-olimpia': 'zona-sul',
+  'campo-belo': 'zona-sul',
+  'jardim-paulista': 'zona-sul',
+  'higienopolis': 'centro',
+  'bela-vista': 'centro',
+  'consolacao': 'centro',
+  'faria-lima': 'zona-oeste',
+};
+
 async function buscarVivaRealScraperAPI(bairro) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
   const slug = toSlug(bairro);
-  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+  const slugFinal = slug === 'faria-lima' ? 'jardim-paulistano' : slug;
+  const zona = ZONA_VIVAREAL[slug] || 'zona-oeste';
+  const targetUrl = `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${zona}/${slugFinal}/apartamento_residencial/`;
   const proxyUrl = `http://api.scraperapi.com?api_key=${scraperKey}&url=${encodeURIComponent(targetUrl)}&country_code=br`;
   try {
     const { data: html } = await axios.get(proxyUrl, {
@@ -1578,9 +1602,8 @@ const BAIRRO_REGIAO = new Map([
   ['sumare', 'zona-oeste'],
   ['sumarezinho', 'zona-oeste'],
   ['jardins', 'zona-oeste'],
-  ['jardim-paulista', 'zona-oeste'],
+  ['jardim-paulista', 'zona-sul'],
   ['vila-pompeia', 'zona-oeste'],
-  ['vila-olimpia', 'zona-oeste'],
   ['faria-lima', 'zona-oeste'],
   // Zona Sul
   ['itaim-bibi', 'zona-sul'],
@@ -1589,6 +1612,7 @@ const BAIRRO_REGIAO = new Map([
   ['vila-mariana', 'zona-sul'],
   ['campo-belo', 'zona-sul'],
   ['brooklin', 'zona-sul'],
+  ['vila-olimpia', 'zona-sul'],
   ['saude', 'zona-sul'],
   ['paraiso', 'zona-sul'],
   ['aclimacao', 'zona-sul'],
@@ -1743,9 +1767,10 @@ async function buscarVivaRealWebUnlocker(bairro) {
 
   const slug = toSlug(bairro);
   const regiaoPrefix = BAIRRO_REGIAO.get(slug);
+  const slugFinal = slug === 'faria-lima' ? 'jardim-paulistano' : slug;
   const targetUrl = regiaoPrefix
-    ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
-    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+    ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slugFinal}/apartamento_residencial/`
+    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slugFinal}/apartamento_residencial/`;
 
   try {
     const { data: html } = await axios.post(
