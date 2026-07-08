@@ -2076,7 +2076,7 @@ async function buscarZapViaProxy(bairro) {
 }
 
 
-async function buscarOLX(bairro, region) {
+async function buscarOLX(bairro, region, temClientesEsperando = false) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
   // ZAP + VivaReal via Web Unlocker (glue-api JSON — mais estável que Puppeteer)
@@ -2126,8 +2126,10 @@ async function buscarOLX(bairro, region) {
   // Circuit breakers separados: ZAP bloqueado não penaliza VivaReal
   const needZap = zapTotal === 0 && circuitAllows('puppeteerZap');
   const needVr  = vrTotal === 0  && circuitAllows('puppeteerVr');
-  if ((needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) {
-    console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro}...`);
+  if (!temClientesEsperando && (needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) {
+    console.log(`   💤 Puppeteer disponível mas pulado: nenhum cliente esperando neste bairro (${bairro}), evitando custo desnecessário.`);
+  } else if ((needZap || needVr) && process.env.BRIGHTDATA_BROWSER_WS) {
+    console.log(`   🌐 Tentando Scraping Browser (Puppeteer) para ${bairro} (cliente real aguardando)...`);
     try {
       const puppeteerResult = await buscarZapEVivaRealPuppeteer(bairro);
       if (puppeteerResult.zap?.length > 0) {
@@ -2350,9 +2352,14 @@ async function rodarScraper() {
     console.log(`   📋 Sem alertas — usando bairros padrão`);
   }
 
+  // Puppeteer (Scraping Browser) só é permitido quando a busca é para bairros
+  // com clientes reais aguardando alerta — nunca para a lista fixa "padrão"
+  // usada só para popular as páginas do site sem ninguém esperando.
+  const temClientesEsperando = bairrosComAlerta.size > 0;
+
   let totalEncontrados = 0;
   for (const b of bairrosParaBuscar) {
-    const imoveis = await buscarOLX(b.bairro, b.region);
+    const imoveis = await buscarOLX(b.bairro, b.region, temClientesEsperando);
     totalEncontrados += imoveis.length;
     total += await salvarImoveis(imoveis);
     await new Promise(r => setTimeout(r, 2000));
