@@ -1494,17 +1494,19 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
   if (!wsEndpoint) return { zap: [], vivareal: [] };
 
   const slug = toSlug(bairro);
+  const slugZap = toSlugZap(bairro);
   const regiaoPrefix = BAIRRO_REGIAO.get(slug);
 
   // ZAP: com zona-oeste no path (confirmado via Playground: 15 links /imovel/)
   const zapUrl = regiaoPrefix
-    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slug}/`
-    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
+    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slugZap}/`
+    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slugZap}/`;
 
-  // VivaReal: com região no path
+  // VivaReal: com região no path + sufixo apartamento_residencial (site não
+  // resolve mais a rota sem o tipo de imóvel no path)
   const vrUrl = regiaoPrefix
-    ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/`
-    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/`;
+    ? `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${regiaoPrefix}/${slug}/apartamento_residencial/`
+    : `https://www.vivareal.com.br/aluguel/sp/sao-paulo/${slug}/apartamento_residencial/`;
 
   // ── ZAP: sessão própria (1 domínio por sessão = sem "Page.navigate domain limit")
   let zapResult = [];
@@ -1767,10 +1769,11 @@ async function buscarZapWebUnlocker(bairro) {
   if (!apiKey) return [];
 
   const slug = toSlug(bairro);
+  const slugZap = toSlugZap(bairro);
   const regiaoPrefix = BAIRRO_REGIAO.get(slug);
   const targetUrl = regiaoPrefix
-    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slug}/`
-    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slug}/`;
+    ? `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${regiaoPrefix}+${slugZap}/`
+    : `https://www.zapimoveis.com.br/aluguel/imoveis/sp+sao-paulo+${slugZap}/`;
 
   try {
     const { data: html } = await axios.post(
@@ -2008,6 +2011,15 @@ function toSlug(str) {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '');
+}
+
+// O ZAP (diferente do VivaReal) abrevia bairros que começam com "Vila" para
+// "vl-" nas URLs de busca — ex: vila-madalena -> vl-madalena,
+// vila-mariana -> vl-mariana, vila-olimpia -> vl-olimpia (confirmado via
+// busca; usar o slug completo "vila-x" retorna página de erro/404 no ZAP).
+function toSlugZap(str) {
+  const slug = toSlug(str);
+  return slug.replace(/^vila-/, 'vl-');
 }
 
 // Busca ZAP direto — tenta VivaReal glue-api primeiro (mais permissiva com IPs de servidor),
