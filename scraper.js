@@ -1419,6 +1419,11 @@ async function buscarVivaRealScraperAPI(bairro) {
         }
       });
     }
+    // Estratégia 3: extração por links (fallback para quando o site não
+    // embute mais __NEXT_DATA__ nem __INITIAL_STATE__)
+    if (imoveis.length === 0) {
+      imoveis.push(...extrairVivaRealDeLinks(String(html), bairro));
+    }
     return imoveis;
   } catch (e) {
     console.log(`   ⚠️  VivaReal ScraperAPI falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
@@ -1719,6 +1724,42 @@ function extrairVivaRealDeNextData(parsed, bairro) {
     .filter(i => i.preco > 0 && i.preco <= 15000 && i.link.length > 30);
 }
 
+// Extração alternativa: VivaReal parou de embutir __NEXT_DATA__ (site migrou
+// para RSC/streaming). O preço e demais dados do imóvel vêm codificados no
+// próprio slug da URL, ex:
+//   .../imovel/apartamento-2-quartos-vila-madalena-sao-paulo-com-garagem-68m2-aluguel-R$6490-id-2893034577/
+// Extraímos direto da tag <a href="..." title="..."> em vez de JSON embutido.
+function extrairVivaRealDeLinks(htmlStr, bairro) {
+  const imoveis = [];
+  const seen = new Set();
+  const re = /<a[^>]*href="(https:\/\/www\.vivareal\.com\.br\/imovel\/[^"]+)"[^>]*title="([^"]*)"[^>]*>/g;
+  let m;
+  while ((m = re.exec(htmlStr)) !== null) {
+    const link = m[1].split('?')[0];
+    const idMatch = link.match(/-id-(\d+)/i);
+    if (!idMatch) continue;
+    const id = idMatch[1];
+    if (seen.has(id)) continue;
+
+    const precoMatch = link.match(/aluguel-\D*(\d+)-id-\d+/i);
+    if (!precoMatch) continue;
+    const preco = parseInt(precoMatch[1], 10);
+    if (!(preco > 0 && preco <= 15000)) continue;
+
+    const quartosMatch = link.match(/-(\d+)-quartos?-/i);
+    const areaMatch = link.match(/-(\d+)m2-/i);
+
+    seen.add(id);
+    imoveis.push({
+      titulo: m[2] || `Imovel VivaReal - ${bairro}`,
+      preco, bairro, tipo: 'residencial', portal: 'VivaReal', link,
+      quartos: quartosMatch ? parseInt(quartosMatch[1], 10) : 0,
+      area: areaMatch ? parseInt(areaMatch[1], 10) : 0,
+    });
+  }
+  return imoveis;
+}
+
 // Busca ZAP via página HTML + Web Unlocker (extrai __NEXT_DATA__) — não usa glue-api
 async function buscarZapWebUnlocker(bairro) {
   const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
@@ -1783,6 +1824,11 @@ async function buscarVivaRealWebUnlocker(bairro) {
     const $ = cheerio.load(htmlStr);
     const nextDataRaw = $('script#__NEXT_DATA__').html();
     if (!nextDataRaw) {
+      const imoveisLinks = extrairVivaRealDeLinks(htmlStr, bairro);
+      if (imoveisLinks.length > 0) {
+        console.log(`   ✅ VivaReal HTML Web Unlocker OK (extração por links) para ${bairro}: ${imoveisLinks.length} imóveis`);
+        return imoveisLinks;
+      }
       console.log(`   __ VivaReal Web Unlocker: __NEXT_DATA__ ausente para ${bairro} | HTML[0:300]: ${htmlStr.replace(/\s+/g,' ').slice(0,300)}`);
       return [];
     }
