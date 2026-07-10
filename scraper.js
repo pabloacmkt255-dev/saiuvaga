@@ -55,6 +55,12 @@ const CIRCUIT_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h de cooldown
 const CIRCUIT_COOLDOWN_PUPPETEER_MS = 6 * 60 * 60 * 1000; // 6h de cooldown
 const circuitState = {};
 
+// Teto de chamadas ao Apify por execução completa do cron (todos os bairros
+// somados) — conserva o crédito pago da conta (assinatura cancelada, válida
+// só até 09/08/2026). Resetado no início de cada rodarScraper().
+const LIMITE_APIFY_POR_CICLO = 5;
+let apifyUsosNesteCiclo = 0;
+
 function circuitAllows(source) {
   const s = circuitState[source];
   if (!s || !s.cooldownUntil) return true;
@@ -1763,6 +1769,41 @@ function extrairVivaRealDeLinks(htmlStr, bairro) {
 }
 
 // Busca ZAP via página HTML + Web Unlocker (extrai __NEXT_DATA__) — não usa glue-api
+// Extração alternativa para o ZAP — mesmo raciocínio do VivaReal: o site
+// também parou de embutir __NEXT_DATA__ (mesmo grupo/infra da VivaReal,
+// confirmado pelo CDN compartilhado "vr-listing" nas imagens). O preço e
+// demais dados vêm no próprio slug da URL do imóvel.
+function extrairZapDeLinks(htmlStr, bairro) {
+  const imoveis = [];
+  const seen = new Set();
+  const re = /<a[^>]*href="(https:\/\/www\.zapimoveis\.com\.br\/imovel\/[^"]+)"[^>]*title="([^"]*)"[^>]*>/g;
+  let m;
+  while ((m = re.exec(htmlStr)) !== null) {
+    const link = m[1].split('?')[0];
+    const idMatch = link.match(/-id-(\d+)/i);
+    if (!idMatch) continue;
+    const id = idMatch[1];
+    if (seen.has(id)) continue;
+
+    const precoMatch = link.match(/aluguel-\D*(\d+)-id-\d+/i);
+    if (!precoMatch) continue;
+    const preco = parseInt(precoMatch[1], 10);
+    if (!(preco > 0 && preco <= 15000)) continue;
+
+    const quartosMatch = link.match(/-(\d+)-quartos?-/i);
+    const areaMatch = link.match(/-(\d+)m2-/i);
+
+    seen.add(id);
+    imoveis.push({
+      titulo: m[2] || `Imovel ZAP - ${bairro}`,
+      preco, bairro, tipo: 'residencial', portal: 'ZAP', link,
+      quartos: quartosMatch ? parseInt(quartosMatch[1], 10) : 0,
+      area: areaMatch ? parseInt(areaMatch[1], 10) : 0,
+    });
+  }
+  return imoveis;
+}
+
 async function buscarZapWebUnlocker(bairro) {
   const apiKey = process.env.BRIGHTDATA_UNLOCKER_KEY;
   const zone   = process.env.BRIGHTDATA_UNLOCKER_ZONE || 'web_unlocker1';
@@ -1786,6 +1827,11 @@ async function buscarZapWebUnlocker(bairro) {
     const $ = cheerio.load(htmlStr);
     const nextDataRaw = $('script#__NEXT_DATA__').html();
     if (!nextDataRaw) {
+      const imoveisLinks = extrairZapDeLinks(htmlStr, bairro);
+      if (imoveisLinks.length > 0) {
+        console.log(`   ✅ ZAP HTML Web Unlocker OK (extração por links) para ${bairro}: ${imoveisLinks.length} imóveis`);
+        return imoveisLinks;
+      }
       console.log(`   __ ZAP Web Unlocker: __NEXT_DATA__ ausente para ${bairro} | HTML[0:300]: ${htmlStr.replace(/\s+/g,' ').slice(0,300)}`);
       return [];
     }
@@ -2236,12 +2282,20 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
     }
   }
 
-  // Apify ZAP dedicado — fallback quando tudo bloqueia
+  // Apify ZAP dedicado — fallback de último recurso: só dispara quando há
+  // cliente real esperando (mesmo racional do Puppeteer) e com teto por
+  // ciclo, pra conservar o crédito pago (conta com assinatura cancelada,
+  // válida até 09/08/2026 — não vale gastar tudo de uma vez).
   let apifyZapCount = 0;
-  if (todos.length === 0 && circuitAllows('apifyZap')
+  if (!temClientesEsperando) {
+    if (todos.length === 0 && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
+      console.log(`   💤 Apify disponível mas pulado: nenhum cliente esperando neste bairro (${bairro}), conservando crédito.`);
+    }
+  } else if (todos.length === 0 && circuitAllows('apifyZap') && apifyUsosNesteCiclo < LIMITE_APIFY_POR_CICLO
       && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
     try {
       await jitter();
+      apifyUsosNesteCiclo++;
       const apifyResult = await buscarViaApify(bairro);
       if (apifyResult === null) {
         circuitFail('apifyZap');
@@ -2250,13 +2304,16 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
         if (apifyResult.length > 0) {
           todos.push(...apifyResult);
           apifyZapCount = apifyResult.length;
-          console.log(`   ✅ Apify ZAP OK para ${bairro}: ${apifyResult.length} imóveis`);
+          console.log(`   ✅ Apify ZAP OK para ${bairro} (cliente real aguardando, uso ${apifyUsosNesteCiclo}/${LIMITE_APIFY_POR_CICLO} do ciclo): ${apifyResult.length} imóveis`);
         }
       }
     } catch (e) {
       circuitFail('apifyZap');
       console.log(`   __ Apify ZAP falhou: ${e.message?.slice(0, 50)}`);
     }
+  } else if (todos.length === 0 && apifyUsosNesteCiclo >= LIMITE_APIFY_POR_CICLO
+      && (process.env.APIFY_TOKEN_ZAP || process.env.APIFY_TOKEN || getApifyTokenPool().length > 0)) {
+    console.log(`   💤 Apify disponível mas pulado: teto de ${LIMITE_APIFY_POR_CICLO} usos por ciclo já atingido, conservando crédito.`);
   }
 
   // Proxy como último recurso
@@ -2413,6 +2470,7 @@ async function verificarAlertas() {
 async function rodarScraper() {
   console.log(`\n🚀 SaiuVaga - ${new Date().toLocaleString('pt-BR')}`);
   let total = 0;
+  apifyUsosNesteCiclo = 0;
 
   // Prioridade 1: bairros com alertas ativos (evita buscar bairros sem usuários)
   const { data: usuarios } = await supabase
