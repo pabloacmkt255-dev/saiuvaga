@@ -1769,6 +1769,43 @@ function extrairVivaRealDeLinks(htmlStr, bairro) {
 }
 
 // Busca ZAP via página HTML + Web Unlocker (extrai __NEXT_DATA__) — não usa glue-api
+// Extração principal do ZAP: o site embute um bloco JSON-LD (schema.org
+// ItemList) com todos os imóveis da página — mais confiável que regex em
+// link, porque preço, título e área vêm em campos estruturados
+// (item.offers.price, item.name, item.floorSize.value). Filtramos por
+// '/imovel/aluguel-apartamento' na URL pra excluir comercial/venda/outros
+// tipos que também aparecem na busca genérica "/aluguel/imoveis/".
+function extrairZapDeJsonLd(htmlStr, bairro) {
+  const imoveis = [];
+  try {
+    const scripts = [...htmlStr.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
+    for (const s of scripts) {
+      let parsed;
+      try { parsed = JSON.parse(s[1]); } catch { continue; }
+      if (parsed?.['@type'] !== 'ItemList' || !Array.isArray(parsed.itemListElement)) continue;
+
+      for (const el of parsed.itemListElement) {
+        const item = el?.item;
+        if (!item) continue;
+        const link = (item.offers?.url || item.url || '').split('?')[0];
+        if (!/\/imovel\/aluguel-apartamento/i.test(link)) continue;
+
+        const preco = parseInt(item.offers?.price) || 0;
+        if (!(preco > 0 && preco <= 15000)) continue;
+
+        imoveis.push({
+          titulo: item.name || `Imovel ZAP - ${bairro}`,
+          preco, bairro, tipo: 'residencial', portal: 'ZAP', link,
+          quartos: parseInt(item.numberOfRooms) || 0,
+          area: parseInt(item.floorSize?.value) || 0,
+        });
+      }
+      break; // já achamos o ItemList, não precisa checar os outros scripts
+    }
+  } catch (e) {}
+  return imoveis;
+}
+
 // Extração alternativa para o ZAP — mesmo raciocínio do VivaReal: o site
 // também parou de embutir __NEXT_DATA__ (mesmo grupo/infra da VivaReal,
 // confirmado pelo CDN compartilhado "vr-listing" nas imagens). O preço e
@@ -1827,6 +1864,11 @@ async function buscarZapWebUnlocker(bairro) {
     const $ = cheerio.load(htmlStr);
     const nextDataRaw = $('script#__NEXT_DATA__').html();
     if (!nextDataRaw) {
+      const imoveisJsonLd = extrairZapDeJsonLd(htmlStr, bairro);
+      if (imoveisJsonLd.length > 0) {
+        console.log(`   ✅ ZAP HTML Web Unlocker OK (extração JSON-LD) para ${bairro}: ${imoveisJsonLd.length} imóveis`);
+        return imoveisJsonLd;
+      }
       const imoveisLinks = extrairZapDeLinks(htmlStr, bairro);
       if (imoveisLinks.length > 0) {
         console.log(`   ✅ ZAP HTML Web Unlocker OK (extração por links) para ${bairro}: ${imoveisLinks.length} imóveis`);
