@@ -2402,7 +2402,7 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
   return unicos;
 }
 
-const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/clljb8m9c12ml8j6d25kviinx96d16r7';
+const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/sqyodlx1fb3qlo13hmqac3363cyitnov';
 
 async function dispararMakeWebhook(imovel) {
   try {
