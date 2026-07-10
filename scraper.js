@@ -2402,12 +2402,27 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
   return unicos;
 }
 
-const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/sqyodlx1fb3qlo13hmqac3363cyitnov';
+const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/clljb8m9c12ml8j6d25kviinx96d16r7';
+
+// Título curto e limpo pra campos com limite de caracteres (ex: Pinterest, ~100).
+// Monta a partir dos campos estruturados (quartos/area/bairro/preco) em vez do
+// título bruto raspado do portal, que costuma vir longo e às vezes duplicado.
+function criarTituloCurto(imovel) {
+  const partes = ['🏠 Apto'];
+  if (imovel.quartos) partes.push(`${imovel.quartos}q`);
+  if (imovel.area) partes.push(`${imovel.area}m²`);
+  partes.push(`- ${imovel.bairro}`);
+  if (imovel.preco) partes.push(`- R$ ${imovel.preco.toLocaleString('pt-BR')}`);
+  let titulo = partes.join(' ');
+  // Truncamento de segurança (limite conservador de 100 chars, ex: Pinterest)
+  if (titulo.length > 97) titulo = titulo.slice(0, 97) + '...';
+  return titulo;
+}
 
 async function dispararMakeWebhook(imovel) {
   try {
     await axios.post(MAKE_WEBHOOK_URL, {
-      title: `🏠 ${imovel.titulo} - ${imovel.bairro}`,
+      title: criarTituloCurto(imovel),
       description: `${imovel.titulo}\n💰 R$ ${(imovel.preco || 0).toLocaleString('pt-BR')}/mês\n📍 ${imovel.bairro}, SP\n\nEncontrado antes de aparecer nos portais. Acesse: saiuvaga.com.br`,
       url: imovel.link,
       image_url: imovel.imagem || 'https://saiuvaga.com.br/og-image.png',
