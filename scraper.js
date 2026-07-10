@@ -1976,16 +1976,31 @@ async function buscarOLXWebUnlocker(bairro) {
       }
     }
 
-    // 2) Fallback: parse direto do DOM renderizado (cards .olx-adcard__*)
+    // 2) Fallback: parse direto do DOM renderizado (cards <section class="olx-adcard...">)
+    // Estrutura real: o preço (h3.olx-adcard__price) e o link (a.olx-adcard__link)
+    // são IRMÃOS dentro do mesmo <section class="olx-adcard">, não um dentro do
+    // outro — por isso subimos até o card externo via .parents() (não .closest(),
+    // que dava match no próprio elemento de preço por ele também conter a
+    // substring de classe "olx-adcard").
     if (imoveis.length === 0) {
       $('[class*="olx-adcard__price"]').each((_, el) => {
-        const precoTxt = $(el).text();
-        const preco = parseInt(precoTxt.replace(/\D/g, '')) || 0;
+        const priceEl = $(el);
+        const cls = priceEl.attr('class') || '';
+        // classe exata "olx-adcard__price", exclui variantes tipo "-info"/"-info-list"
+        if (!/(^|\s)olx-adcard__price(\s|$)/.test(cls)) return;
+
+        const preco = parseInt(priceEl.text().replace(/\D/g, '')) || 0;
         if (preco <= 0) return;
-        const card = $(el).closest('a, [class*="olx-adcard"]');
-        let link = card.is('a') ? card.attr('href') : card.find('a').first().attr('href');
+
+        const outerCard = priceEl.parents('[class*="olx-adcard"]').filter((_, p) => {
+          const c = $(p).attr('class') || '';
+          return /(^|\s)olx-adcard(\s|$)/.test(c);
+        }).first();
+        const linkEl = outerCard.find('a.olx-adcard__link, a[data-testid="adcard-link"]').first();
+        let link = linkEl.attr('href') || '';
         if (link && !link.startsWith('http')) link = `https://www.olx.com.br${link}`;
-        const titulo = card.find('h2, h3').first().text().trim() || `Imovel OLX - ${bairro}`;
+        const titulo = linkEl.attr('title') || linkEl.find('h2').first().text().trim() || `Imovel OLX - ${bairro}`;
+
         if (link && link.length > 20) {
           imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
         }
