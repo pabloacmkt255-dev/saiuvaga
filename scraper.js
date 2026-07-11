@@ -1552,6 +1552,71 @@ async function buscarZapEVivaRealPuppeteer(bairro) {
 // ─── MERCADO LIVRE — desativado (IP de servidor bloqueado com 403) ────────────
 async function buscarMercadoLivre(bairro) { return []; }
 
+// ── Tier 0 (GRÁTIS): OLX nunca precisou de anti-bot pesado — o bug antigo
+// era só o seletor CSS (ver histórico), então uma requisição direta (sem
+// proxy) já funciona na maioria das vezes. Tentada antes de qualquer serviço
+// pago ou de cota limitada (ScraperAPI/BrightData).
+async function buscarOLXDireto(bairro) {
+  const slug = toSlug(bairro);
+  const targetUrl = `https://www.olx.com.br/imoveis/aluguel/estado-sp/sao-paulo-e-regiao/${slug}`;
+  try {
+    const { data: html } = await axios.get(targetUrl, {
+      headers: {
+        'User-Agent': getRandomUA(),
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+      },
+      timeout: 30000,
+    });
+    const $ = cheerio.load(String(html));
+    const imoveis = [];
+
+    const nextData = $('script#__NEXT_DATA__').html();
+    if (nextData) {
+      try {
+        const parsed = JSON.parse(nextData);
+        const ads = parsed?.props?.pageProps?.ads
+          || parsed?.props?.pageProps?.listingProps?.ads || [];
+        ads.forEach(ad => {
+          const preco = parseInt((ad.price || '').replace(/\D/g, '')) || 0;
+          const link = ad.url || ad.linkUrl || '';
+          const titulo = ad.title || `Imovel OLX - ${bairro}`;
+          if (preco > 0 && link.length > 20) {
+            imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+          }
+        });
+      } catch (pe) {}
+    }
+
+    // Fallback: mesmo parse por CSS usado no Web Unlocker (cards olx-adcard)
+    if (imoveis.length === 0) {
+      $('[class*="olx-adcard__price"]').each((_, el) => {
+        const priceEl = $(el);
+        const cls = priceEl.attr('class') || '';
+        if (!/(^|\s)olx-adcard__price(\s|$)/.test(cls)) return;
+        const preco = parseInt(priceEl.text().replace(/\D/g, '')) || 0;
+        if (preco <= 0) return;
+        const outerCard = priceEl.parents('[class*="olx-adcard"]').filter((_, p) => {
+          const c = $(p).attr('class') || '';
+          return /(^|\s)olx-adcard(\s|$)/.test(c);
+        }).first();
+        const linkEl = outerCard.find('a.olx-adcard__link, a[data-testid="adcard-link"]').first();
+        let link = linkEl.attr('href') || '';
+        if (link && !link.startsWith('http')) link = `https://www.olx.com.br${link}`;
+        const titulo = linkEl.attr('title') || linkEl.find('h2').first().text().trim() || `Imovel OLX - ${bairro}`;
+        if (link && link.length > 20) {
+          imoveis.push({ titulo, preco, bairro, tipo: 'residencial', portal: 'OLX', link });
+        }
+      });
+    }
+
+    return imoveis.filter(i => i.preco > 0 && i.preco <= 15000 && i.link?.length > 20);
+  } catch (e) {
+    console.log(`   __ OLX direto (grátis) falhou para ${bairro}: ${e.message?.slice(0, 50)}`);
+    return [];
+  }
+}
+
 async function buscarOLXScraperAPI(bairro) {
   const scraperKey = process.env.SCRAPERAPI_KEY;
   if (!scraperKey) return [];
@@ -2072,17 +2137,22 @@ async function buscarOLXResidentialProxy(bairro) {
 
 // Orquestra OLX: Web Unlocker → ScraperAPI → Proxy Residencial
 async function buscarOLXHtml(bairro) {
-  // 1. Web Unlocker (BrightData)
-  if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
-    const result = await buscarOLXWebUnlocker(bairro);
-    if (result.length > 0) return result;
-  }
-  // 2. ScraperAPI (quando tem créditos)
+  // Cascata GRÁTIS → PAGO: cada nível só é tentado se o anterior não trouxe nada.
+  // 1. Direto, sem proxy (100% grátis)
+  const direto = await buscarOLXDireto(bairro);
+  if (direto.length > 0) return direto;
+
+  // 2. ScraperAPI (plano free: 1.000 requisições/mês, sem custo dentro da cota)
   if (process.env.SCRAPERAPI_KEY) {
     const result = await buscarOLXScraperAPI(bairro);
     if (result.length > 0) return result;
   }
-  // 3. Proxy Residencial BrightData (fallback final)
+  // 3. Web Unlocker (BrightData) — pago, só entra se o grátis falhou
+  if (process.env.BRIGHTDATA_UNLOCKER_KEY) {
+    const result = await buscarOLXWebUnlocker(bairro);
+    if (result.length > 0) return result;
+  }
+  // 4. Proxy Residencial BrightData — pago, último recurso
   if (process.env.RESIDENTIAL_PROXY_URL) {
     return buscarOLXResidentialProxy(bairro);
   }
@@ -2265,8 +2335,9 @@ async function buscarZapViaProxy(bairro) {
 async function buscarOLX(bairro, region, temClientesEsperando = false) {
   console.log(`\n🔍 Buscando imoveis: ${bairro}`);
 
-  // ZAP + VivaReal via Web Unlocker (glue-api JSON — mais estável que Puppeteer)
-  // OLX também via Web Unlocker — todas as 3 fontes em paralelo
+  // Cascata GRÁTIS → PAGO: cada nível só é acionado se o anterior não trouxe
+  // resultado. ZAP/VivaReal glue-api direto e OLX direto não custam nada;
+  // Web Unlocker (BrightData) é pago e só entra como fallback abaixo.
   const runSource = async (name, fn) => {
     if (!circuitAllows(name)) {
       console.log(`   ⛔ ${name} em cooldown (circuit breaker), pulando...`);
@@ -2283,9 +2354,11 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
     }
   };
 
+  // Tier 0 (GRÁTIS): glue-api direto (ZAP/VivaReal, sem proxy) + OLX
+  // direto/ScraperAPI free-tier (buscarOLXHtml já tenta grátis primeiro por dentro)
   const [zapResult, vivaRealResult, olxResult] = await Promise.allSettled([
-    runSource('zapWebUnlocker', buscarZapWebUnlocker),
-    runSource('vivaRealWebUnlocker', buscarVivaRealWebUnlocker),
+    runSource('zapDireto', buscarZapDireto),
+    runSource('vivaReal', buscarVivaRealDireto),
     runSource('olxHtml', buscarOLXHtml),
   ]);
 
@@ -2295,14 +2368,14 @@ async function buscarOLX(bairro, region, temClientesEsperando = false) {
     ...(olxResult.status === 'fulfilled' ? olxResult.value : []),
   ];
 
-  // Fallback: glue-api direto (sem proxy) se Web Unlocker não retornou ZAP/VivaReal
+  // Tier 1 (PAGO): Web Unlocker (BrightData) — só entra se o grátis não trouxe ZAP/VivaReal
   if (zapResult.value?.length === 0 || vivaRealResult.value?.length === 0) {
-    const [zapDireto, vivaReal] = await Promise.allSettled([
-      zapResult.value?.length === 0 ? runSource('zapDireto', buscarZapDireto) : Promise.resolve([]),
-      vivaRealResult.value?.length === 0 ? runSource('vivaReal', buscarVivaRealDireto) : Promise.resolve([]),
+    const [zapWebUnlocker, vivaRealWebUnlocker] = await Promise.allSettled([
+      zapResult.value?.length === 0 ? runSource('zapWebUnlocker', buscarZapWebUnlocker) : Promise.resolve([]),
+      vivaRealResult.value?.length === 0 ? runSource('vivaRealWebUnlocker', buscarVivaRealWebUnlocker) : Promise.resolve([]),
     ]);
-    if (zapDireto.status === 'fulfilled') todos.push(...zapDireto.value);
-    if (vivaReal.status === 'fulfilled') todos.push(...vivaReal.value);
+    if (zapWebUnlocker.status === 'fulfilled') todos.push(...zapWebUnlocker.value);
+    if (vivaRealWebUnlocker.status === 'fulfilled') todos.push(...vivaRealWebUnlocker.value);
   }
 
   // Fallback: Scraping Browser (Puppeteer) se ZAP ou VivaReal ainda sem resultado
